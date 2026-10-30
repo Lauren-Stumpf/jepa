@@ -44,14 +44,30 @@ def load_flashmd(model_spec, stride_fs, device):
     return load_atomistic_model(model_spec).to(device)
 
 
+_stepper_cache = {}
+
+
 def flashmd_one_step(atoms, model, stride_fs, device):
-    from flashmd.ase.velocity_verlet import VelocityVerlet
-    a = atoms.copy()
-    # rescale_energy=False: raw model output, no energy-conservation filter
-    dyn = VelocityVerlet(atoms=a, timestep=stride_fs * ase.units.fs, model=model,
-                         device=device, rescale_energy=False)
-    dyn.run(1)
-    return a.get_positions(), a.get_momenta()
+    # Call FlashMD's stepper directly: ASE's MolecularDynamics.run() demands a
+    # force calculator even though FlashMD never uses forces.
+    from flashmd.stepper import FlashMDStepper
+    from flashmd.ase.velocity_verlet import _convert_atoms_to_system
+    key = id(model)
+    if key not in _stepper_cache:
+        caps = model.capabilities()
+        n_steps = int([k for k in caps.outputs.keys() if "mtt::delta_" in k][0].split("_")[1])
+        base = float(model.module.base_time_step)
+        if abs(n_steps * base - stride_fs) > 1e-6:
+            raise ValueError(f"model covers {n_steps * base} fs, asked for {stride_fs} fs")
+        _stepper_cache[key] = (FlashMDStepper([model], n_steps, torch.device(device)),
+                               getattr(torch, caps.dtype))
+    stepper, dtype = _stepper_cache[key]
+    system = _convert_atoms_to_system(atoms, dtype=dtype, device=torch.device(device))
+    with torch.no_grad():
+        new_system = stepper.step(system)
+    q = new_system.positions.detach().cpu().numpy()
+    p = new_system.get_data("momenta").block().values.squeeze(-1).detach().cpu().numpy()
+    return q, p
 
 
 def verlet_reference(atoms, calc, stride_fs, dt_fs=0.25):
