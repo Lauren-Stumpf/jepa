@@ -88,6 +88,10 @@ def main():
     ap.add_argument("--model", default="pretrained")
     ap.add_argument("--pet_mad_version", default="1.0.0")
     ap.add_argument("--out", default="results/eval/onestep.csv")
+    ap.add_argument("--max_T", type=float, default=5000.0,
+                    help="skip frames whose stored kinetic temperature exceeds this (K)")
+    ap.add_argument("--max_disp", type=float, default=5.0,
+                    help="skip frames whose stored mass-scaled displacement RMS exceeds this")
     args = ap.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -101,6 +105,7 @@ def main():
           f"{args.n} frames every {args.every}")
 
     rows = []
+    broken = []
     sq_dq_ms = sq_dp_ms = sq_dq = sq_dp = 0.0
     sq_ref_dq_ms = sq_ref_p_ms = 0.0
     n_entries = 0
@@ -112,6 +117,11 @@ def main():
         ref_q = atoms.arrays["future_positions"]
         ref_p = atoms.arrays["future_momenta"]
         m = atoms.get_masses()[:, None]
+        kin_T = 2.0 * atoms.get_kinetic_energy() / (3.0 * len(atoms) * ase.units.kB)
+        ref_disp_rms = float(np.sqrt((((ref_q - atoms.get_positions()) * np.sqrt(m)) ** 2).mean()))
+        if kin_T > args.max_T or ref_disp_rms > args.max_disp:
+            broken.append((i, atoms.get_chemical_formula(), float(kin_T), ref_disp_rms))
+            continue
         if model is None:
             q, p = verlet_reference(atoms, calc, args.stride_fs)
         else:
@@ -127,7 +137,6 @@ def main():
         sq_dq += (dq ** 2).sum(); sq_dp += (dp ** 2).sum()
         sq_ref_dq_ms += (ref_disp_ms ** 2).sum(); sq_ref_p_ms += (ref_p_ms ** 2).sum()
         n_entries += k
-        kin_T = 2.0 * atoms.get_kinetic_energy() / (3.0 * len(atoms) * ase.units.kB)
         rows.append({
             "frame": i, "natoms": len(atoms), "formula": atoms.get_chemical_formula(),
             "kinetic_T_K": float(kin_T),
@@ -145,7 +154,13 @@ def main():
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
         w.writeheader(); w.writerows(rows)
 
-    print(f"\nsummary over {len(rows)} frames, {n_entries//3} atoms")
+    med_dq = np.median([r["rmse_dq_massscaled"] for r in rows])
+    med_dp = np.median([r["rmse_dp_massscaled"] for r in rows])
+    print(f"\nsummary over {len(rows)} frames, {n_entries//3} atoms "
+          f"({len(broken)} frames excluded as broken reference runs)")
+    for b in broken:
+        print(f"  excluded frame {b[0]} {b[1]}: kinetic T {b[2]:.3g} K, stored displacement RMS {b[3]:.3g}")
+    print(f"  per-frame median mass-scaled RMSE: dq {med_dq:.4f}, dp {med_dp:.4f}")
     print(f"  mass-scaled displacement RMSE: {np.sqrt(sq_dq_ms/n_entries):.4f} "
           f"(reference displacement RMS {np.sqrt(sq_ref_dq_ms/n_entries):.4f})")
     print(f"  mass-scaled momentum RMSE:     {np.sqrt(sq_dp_ms/n_entries):.4f} "
