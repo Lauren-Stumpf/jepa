@@ -35,21 +35,21 @@ import torch
 
 
 def load_flashmd(model_spec, stride_fs, device):
-    from flashmd import get_pretrained
-    if model_spec == "pretrained":
-        try:
-            energy_model, flashmd_model = get_pretrained("pet-mad", stride_fs)
-        except TypeError:
-            energy_model, flashmd_model = get_pretrained(stride_fs)
-        return flashmd_model
+    # flashmd 0.1.2: get_universal_model(time_step) loads the PET-MAD (PBEsol)
+    # universal checkpoints, the same family the Zenodo pairs were made with
     from metatomic.torch import load_atomistic_model
+    if model_spec == "pretrained":
+        from flashmd import get_universal_model
+        return get_universal_model(int(round(stride_fs))).to(device)
     return load_atomistic_model(model_spec).to(device)
 
 
 def flashmd_one_step(atoms, model, stride_fs, device):
     from flashmd.ase.velocity_verlet import VelocityVerlet
     a = atoms.copy()
-    dyn = VelocityVerlet(atoms=a, timestep=stride_fs * ase.units.fs, model=model, device=device)
+    # rescale_energy=False: raw model output, no energy-conservation filter
+    dyn = VelocityVerlet(atoms=a, timestep=stride_fs * ase.units.fs, model=model,
+                         device=device, rescale_energy=False)
     dyn.run(1)
     return a.get_positions(), a.get_momenta()
 
