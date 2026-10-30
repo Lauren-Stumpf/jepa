@@ -2,7 +2,6 @@
 *.xyz.zst
 *.ckpt
 *.pt
-*.csv
 *.png
 __pycache__/
 .venv/

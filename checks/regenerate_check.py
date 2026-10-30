@@ -53,13 +53,16 @@ def main():
         pe0 = a.get_potential_energy()
         e0 = pe0 + a.get_kinetic_energy()
         # single-point check: our PET-MAD against the forces/energy stored in the file
-        if "forces" in atoms.arrays:
-            df = a.get_forces() - atoms.arrays["forces"]
-            force_mae_meV_A = float(np.abs(df).mean() * 1000.0)
+        # ASE puts a frame's stored forces/energy on a results object, not in arrays/info
+        stored = atoms.calc.results if atoms.calc is not None else {}
+        stored_forces = atoms.arrays.get("forces", stored.get("forces"))
+        stored_pe = atoms.info.get("potential_energy", stored.get("energy"))
+        if stored_forces is not None:
+            force_mae_meV_A = float(np.abs(a.get_forces() - stored_forces).mean() * 1000.0)
         else:
             force_mae_meV_A = float("nan")
-        if "potential_energy" in atoms.info:
-            pe_diff_meV_atom = float((pe0 - atoms.info["potential_energy"]) / len(a) * 1000.0)
+        if stored_pe is not None:
+            pe_diff_meV_atom = float((pe0 - stored_pe) / len(a) * 1000.0)
         else:
             pe_diff_meV_atom = float("nan")
         dyn = VelocityVerlet(a, timestep=args.dt_fs * ase.units.fs)
