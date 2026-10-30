@@ -50,7 +50,18 @@ def main():
 
         a = atoms.copy()
         a.calc = calc
-        e0 = a.get_potential_energy() + a.get_kinetic_energy()
+        pe0 = a.get_potential_energy()
+        e0 = pe0 + a.get_kinetic_energy()
+        # single-point check: our PET-MAD against the forces/energy stored in the file
+        if "forces" in atoms.arrays:
+            df = a.get_forces() - atoms.arrays["forces"]
+            force_mae_meV_A = float(np.abs(df).mean() * 1000.0)
+        else:
+            force_mae_meV_A = float("nan")
+        if "potential_energy" in atoms.info:
+            pe_diff_meV_atom = float((pe0 - atoms.info["potential_energy"]) / len(a) * 1000.0)
+        else:
+            pe_diff_meV_atom = float("nan")
         dyn = VelocityVerlet(a, timestep=args.dt_fs * ase.units.fs)
         dyn.run(n_steps)
         e1 = a.get_potential_energy() + a.get_kinetic_energy()
@@ -71,10 +82,13 @@ def main():
             "rms_dp_massscaled": float(np.sqrt((dp_ms ** 2).mean())),
             "ref_p_rms_massscaled": float(np.sqrt(((ref_p / np.sqrt(m)) ** 2).mean())),
             "energy_drift_meV_per_atom": float((e1 - e0) / len(a) * 1000.0),
+            "force_mae_vs_stored_meV_A": force_mae_meV_A,
+            "pe_diff_vs_stored_meV_atom": pe_diff_meV_atom,
         })
         if (i + 1) % 10 == 0:
             r = rows[-1]
-            print(f"{i+1}: {r['formula']}, rms dq {r['rms_dq_A']:.2e} A, "
+            print(f"{i+1}: {r['formula']}, force mae vs stored {r['force_mae_vs_stored_meV_A']:.2f} meV/A, "
+                  f"rms dq {r['rms_dq_A']:.2e} A, "
                   f"rel dp {r['rms_dp_massscaled']/r['ref_p_rms_massscaled']:.2e}, "
                   f"drift {r['energy_drift_meV_per_atom']:.3f} meV/atom")
 
@@ -86,7 +100,10 @@ def main():
     rms_dq = np.array([r["rms_dq_A"] for r in rows])
     rel_dp = np.array([r["rms_dp_massscaled"] / r["ref_p_rms_massscaled"] for r in rows])
     drift = np.array([r["energy_drift_meV_per_atom"] for r in rows])
+    fmae = np.array([r["force_mae_vs_stored_meV_A"] for r in rows])
     print("\nsummary over", len(rows), "structures")
+    print(f"  single-point force MAE vs stored forces: median {np.nanmedian(fmae):.3f} meV/A, "
+          f"max {np.nanmax(fmae):.3f} meV/A  (near zero means same PET-MAD version)")
     print(f"  rms position difference: median {np.median(rms_dq):.2e} A, max {rms_dq.max():.2e} A")
     print(f"  relative momentum difference: median {np.median(rel_dp):.2e}, max {rel_dp.max():.2e}")
     print(f"  energy drift over stride: median {np.median(np.abs(drift)):.3f} meV/atom, "
