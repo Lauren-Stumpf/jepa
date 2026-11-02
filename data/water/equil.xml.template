@@ -1,0 +1,25 @@
+<simulation verbosity='low'>
+  <output prefix='equil'>
+    <properties stride='20' filename='out'> [ step, time{picosecond}, conserved{electronvolt}, temperature{kelvin}, kinetic_md{electronvolt}, potential{electronvolt} ] </properties>
+    <checkpoint stride='2000' filename='chk' overwrite='true'/>
+  </output>
+  <total_steps> __EQUIL_STEPS__ </total_steps>
+  <prng><seed> __SEED__ </seed></prng>
+  <ffsocket name='qtip4pf' mode='unix' pbc='false'>
+    <address> __ADDRESS__ </address>
+  </ffsocket>
+  <system>
+    <initialize nbeads='1'>
+      <file mode='xyz'> __INIT_XYZ__ </file>
+      <velocities mode='thermal' units='kelvin'> 300 </velocities>
+    </initialize>
+    <forces><force forcefield='qtip4pf'/></forces>
+    <ensemble><temperature units='kelvin'> 300 </temperature></ensemble>
+    <motion mode='dynamics'>
+      <dynamics mode='nvt'>
+        <timestep units='femtosecond'> 0.5 </timestep>
+        <thermostat mode='langevin'><tau units='femtosecond'> 10 </tau></thermostat>
+      </dynamics>
+    </motion>
+  </system>
+</simulation>

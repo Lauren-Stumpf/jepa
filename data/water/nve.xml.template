@@ -1,0 +1,24 @@
+<simulation verbosity='low'>
+  <output prefix='nve'>
+    <properties stride='1' filename='out'> [ step, time{femtosecond}, conserved{electronvolt}, temperature{kelvin}, kinetic_md{electronvolt}, potential{electronvolt} ] </properties>
+    <trajectory filename='pos' stride='1' format='xyz' cell_units='angstrom'> positions{angstrom} </trajectory>
+    <trajectory filename='mom' stride='1' format='xyz' cell_units='angstrom'> momenta{atomic_unit} </trajectory>
+  </output>
+  <total_steps> __NVE_STEPS__ </total_steps>
+  <prng><seed> __SEED__ </seed></prng>
+  <ffsocket name='qtip4pf' mode='unix' pbc='false'>
+    <address> __ADDRESS__ </address>
+  </ffsocket>
+  <system>
+    <initialize nbeads='1'>
+      <file mode='chk'> __EQUIL_CHK__ </file>
+    </initialize>
+    <forces><force forcefield='qtip4pf'/></forces>
+    <ensemble><temperature units='kelvin'> 300 </temperature></ensemble>
+    <motion mode='dynamics'>
+      <dynamics mode='nve'>
+        <timestep units='femtosecond'> 0.25 </timestep>
+      </dynamics>
+    </motion>
+  </system>
+</simulation>
