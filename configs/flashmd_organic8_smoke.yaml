@@ -1,0 +1,85 @@
+# From-scratch FlashMD baseline on the organic-molecule subset of the Zenodo 8 fs file.
+# Architecture and trainer defaults follow metatrain's FlashMD (PET backbone).
+# Run:  mtt train configs/flashmd_organic8_scratch.yaml -o results/models/flashmd_organic8_scratch.pt
+seed: 0
+device: gpu
+base_precision: 32
+
+wandb:
+  project: jepa-flashmd
+  name: smoke
+
+architecture:
+  name: experimental.flashmd
+  model:
+    cutoff: 4.5
+    d_pet: 128
+    d_node: 512
+    num_gnn_layers: 3
+    num_attention_layers: 2
+    predict_momenta_as_difference: false   # large stride: predict momenta directly (paper)
+  training:
+    timestep: 8            # fs; the Zenodo file is the 8 fs stride
+    batch_size: 16
+    num_epochs: 3
+    learning_rate: 3.0e-4   # paper, App. B.1
+    warmup_fraction: 0.01
+    log_interval: 1
+    checkpoint_interval: 1
+    loss:
+      position: {type: mse, weight: 1.0, reduction: mean}
+      momentum: {type: mse, weight: 1.0, reduction: mean}
+
+training_set:
+  systems:
+    read_from: data/organic8/train.xyz
+    length_unit: A
+  targets:
+    position:
+      key: future_positions
+      quantity: length
+      unit: A
+      type: {cartesian: {rank: 1}}
+      sample_kind: atom
+    momentum:
+      key: future_momenta
+      quantity: momentum
+      unit: (eV*u)^(1/2)
+      type: {cartesian: {rank: 1}}
+      sample_kind: atom
+
+validation_set:
+  systems:
+    read_from: data/organic8/val.xyz
+    length_unit: A
+  targets:
+    position:
+      key: future_positions
+      quantity: length
+      unit: A
+      type: {cartesian: {rank: 1}}
+      sample_kind: atom
+    momentum:
+      key: future_momenta
+      quantity: momentum
+      unit: (eV*u)^(1/2)
+      type: {cartesian: {rank: 1}}
+      sample_kind: atom
+
+test_set:
+  systems:
+    read_from: data/organic8/test.xyz
+    length_unit: A
+  targets:
+    position:
+      key: future_positions
+      quantity: length
+      unit: A
+      type: {cartesian: {rank: 1}}
+      sample_kind: atom
+    momentum:
+      key: future_momenta
+      quantity: momentum
+      unit: (eV*u)^(1/2)
+      type: {cartesian: {rank: 1}}
+      sample_kind: atom
