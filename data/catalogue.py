@@ -3,8 +3,9 @@ Catalogue every frame of a FlashMD Zenodo pairs file in one pass.
 
 Writes one CSV row per frame with:
   frame        index in the file
-  group        structure group id (increments when formula or atom count changes
-               between consecutive frames; frames of one structure are contiguous)
+  group        structure group id (increments when formula, atom count or cell
+               volume changes between consecutive frames; frames of one
+               structure are contiguous)
   formula      chemical formula
   natoms
   periodic     1 if any periodic direction, else 0
@@ -57,7 +58,8 @@ def main():
                 break
             n = len(atoms)
             formula = atoms.get_chemical_formula()
-            key = (formula, n)
+            # cell volume distinguishes adjacent structures with the same composition
+            key = (formula, n, round(float(atoms.get_volume()), 1) if atoms.pbc.any() else None)
             if key != prev_key:
                 group += 1
                 prev_key = key

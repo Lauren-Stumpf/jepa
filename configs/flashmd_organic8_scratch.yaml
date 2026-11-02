@@ -11,6 +11,7 @@ wandb:
 
 architecture:
   name: experimental.flashmd
+  atomic_types: [1, 6, 7, 8]
   model:
     cutoff: 4.5
     d_pet: 128

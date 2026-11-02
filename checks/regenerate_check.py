@@ -95,6 +95,8 @@ def main():
                   f"rel dp {r['rms_dp_massscaled']/r['ref_p_rms_massscaled']:.2e}, "
                   f"drift {r['energy_drift_meV_per_atom']:.3f} meV/atom")
 
+    if not rows:
+        raise SystemExit("no structures processed; nothing written")
     with open(args.out, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
         w.writeheader()

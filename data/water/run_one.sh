@@ -13,6 +13,14 @@ EQUIL_STEPS=${EQUIL_STEPS:-10000}   # 10000 x 0.5 fs = 5 ps
 NVE_STEPS=${NVE_STEPS:-8000}        # 8000 x 0.25 fs = 2 ps
 ADDR="qtip4pf_${SEED}_$$"
 
+wait_for_socket() {  # i-PI creates /tmp/ipi_<address>; the driver exits if it is not there yet
+  for _ in $(seq 1 120); do
+    [ -S "/tmp/ipi_$1" ] && return 0
+    sleep 0.5
+  done
+  echo "i-PI socket /tmp/ipi_$1 did not appear"; exit 1
+}
+
 mkdir -p "$OUT" && cd "$OUT"
 cp "$HERE/water64_init_ipi.xyz" init.xyz
 
@@ -20,17 +28,18 @@ sed -e "s|__SEED__|$SEED|; s|__ADDRESS__|$ADDR|; s|__EQUIL_STEPS__|$EQUIL_STEPS|
     "$HERE/equil.xml.template" > equil.xml
 i-pi equil.xml > equil.log 2>&1 &
 IPI=$!
-sleep 3
+wait_for_socket "$ADDR"
 i-pi-driver -u -a "$ADDR" -m qtip4pf > driver_equil.log 2>&1 &
 wait $IPI
-# i-PI writes the checkpoint as equil.chk (overwrite=true)
+# checkpoint stride equals EQUIL_STEPS, so equil.chk is the final state
 test -s equil.chk
+grep -q "<step>$EQUIL_STEPS</step>" equil.chk || { echo "equil.chk is not at step $EQUIL_STEPS"; exit 1; }
 
 sed -e "s|__SEED__|$SEED|; s|__ADDRESS__|${ADDR}_nve|; s|__NVE_STEPS__|$NVE_STEPS|; s|__EQUIL_CHK__|equil.chk|" \
     "$HERE/nve.xml.template" > nve.xml
 i-pi nve.xml > nve.log 2>&1 &
 IPI=$!
-sleep 3
+wait_for_socket "${ADDR}_nve"
 i-pi-driver -u -a "${ADDR}_nve" -m qtip4pf > driver_nve.log 2>&1 &
 wait $IPI
 echo "seed $SEED done: $(wc -l < nve.out) property lines"

@@ -19,6 +19,8 @@ import pandas as pd
 
 
 def classify(vol_per_atom):
+    if vol_per_atom != vol_per_atom:  # NaN: no cell
+        return "nonperiodic"
     if vol_per_atom < 15:
         return "dense"
     if vol_per_atom < 60:

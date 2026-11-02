@@ -47,9 +47,50 @@ def load_flashmd(model_spec, stride_fs, device):
 _stepper_cache = {}
 
 
+def _is_metatrain_export(model):
+    return not any("mtt::delta_" in k for k in model.capabilities().outputs.keys())
+
+
+def _metatrain_one_step(atoms, model, stride_fs, device):
+    # metatrain's FlashMD export: outputs "position" and "momentum" (absolute,
+    # unscaled), reads system data "momentum" and "mass", buffer "timestep".
+    from metatensor.torch import Labels, TensorBlock, TensorMap
+    from metatomic.torch import ModelEvaluationOptions, ModelOutput, System
+    from metatomic.torch.ase_calculator import _ase_to_torch_data
+    from metatrain.utils.neighbor_lists import get_system_with_neighbor_lists
+    key = id(model)
+    if key not in _stepper_cache:
+        caps = model.capabilities()
+        model_dt = float(model.module.timestep)
+        if abs(model_dt - stride_fs) > 1e-6:
+            raise ValueError(f"model timestep {model_dt} fs, asked for {stride_fs} fs")
+        _stepper_cache[key] = (None, getattr(torch, caps.dtype))
+    _, dtype = _stepper_cache[key]
+    dev = torch.device(device)
+    system = System(*_ase_to_torch_data(atoms, dtype=dtype, device=dev))
+    n = len(atoms)
+    samples = Labels(names=["system", "atom"], values=torch.tensor([[0, j] for j in range(n)], device=dev))
+    xyz = Labels(names="xyz", values=torch.tensor([[0], [1], [2]], device=dev))
+    for name, arr, comps in (("momentum", atoms.get_momenta(), [xyz]), ("mass", atoms.get_masses(), [])):
+        vals = torch.tensor(arr, dtype=dtype, device=dev).unsqueeze(-1)
+        system.add_data(name, TensorMap(keys=Labels.single().to(dev), blocks=[TensorBlock(
+            values=vals, samples=samples, components=comps,
+            properties=Labels(names=[name], values=torch.tensor([[0]], device=dev)))]))
+    system = get_system_with_neighbor_lists(system, model.requested_neighbor_lists())
+    opts = ModelEvaluationOptions(length_unit="Angstrom", outputs={
+        "position": ModelOutput(per_atom=True), "momentum": ModelOutput(per_atom=True)})
+    with torch.no_grad():
+        out = model([system], opts, check_consistency=False)
+    q = out["position"].block().values.squeeze(-1).detach().cpu().numpy()
+    p = out["momentum"].block().values.squeeze(-1).detach().cpu().numpy()
+    return q, p
+
+
 def flashmd_one_step(atoms, model, stride_fs, device):
-    # Call FlashMD's stepper directly: ASE's MolecularDynamics.run() demands a
-    # force calculator even though FlashMD never uses forces.
+    if _is_metatrain_export(model):
+        return _metatrain_one_step(atoms, model, stride_fs, device)
+    # flashmd 0.1.2 universal checkpoints: call the package stepper directly,
+    # since ASE's MolecularDynamics.run() demands a force calculator.
     from flashmd.stepper import FlashMDStepper
     from flashmd.ase.velocity_verlet import _convert_atoms_to_system
     key = id(model)
@@ -83,7 +124,9 @@ def main():
     ap.add_argument("xyz")
     ap.add_argument("--stride_fs", type=float, default=8.0)
     ap.add_argument("--n", type=int, default=2000, help="number of frames to evaluate")
-    ap.add_argument("--every", type=int, default=500, help="take one frame every this many")
+    ap.add_argument("--every", type=int, default=2500,
+                    help="take one frame every this many (the Zenodo file has 500 frames per structure; "
+                         "2500 spreads 2000 samples over all 10000 structures)")
     ap.add_argument("--offset", type=int, default=7, help="first frame index to take")
     ap.add_argument("--model", default="pretrained")
     ap.add_argument("--pet_mad_version", default="1.0.0")
@@ -149,6 +192,8 @@ def main():
             print(f"{len(rows)} frames, running mass-scaled RMSE: "
                   f"dq {np.sqrt(sq_dq_ms/n_entries):.4f}, dp {np.sqrt(sq_dp_ms/n_entries):.4f}")
 
+    if not rows:
+        raise SystemExit("no frames evaluated (all excluded or --n 0); nothing written")
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     with open(args.out, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))

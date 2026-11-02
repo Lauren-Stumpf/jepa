@@ -62,7 +62,7 @@ def main():
           f"{sum(v == 'train' for v in split.values())} train, {n_val} val, {n_test} test")
 
     cat = pd.read_csv(args.catalogue, usecols=["frame", "group", "broken"])
-    cat = cat[cat["group"].isin(split)]
+    cat = cat[cat["group"].isin(list(split))]
     keep = cat[cat["broken"] == 0]
     frame_split = dict(zip(keep["frame"].astype(int), keep["group"].map(split)))
     last_frame = max(frame_split)
@@ -99,6 +99,17 @@ def main():
         "formulas": {s: sorted(set(per[per["group"].isin([g for g, v in split.items() if v == s])]["formula"]))
                      for s in counts},
     }
+    # leakage check: the same molecule (formula, atoms, cell volume) must not sit in two splits
+    sel_idx = sel.set_index("group")
+    sig_split = {}
+    for g, sname in split.items():
+        r = sel_idx.loc[g]
+        sig = (r["formula"], int(r["natoms"]), round(float(r["vol_per_atom"]) * int(r["natoms"]), 1))
+        sig_split.setdefault(sig, set()).add(sname)
+    leaks = {k: v for k, v in sig_split.items() if len(v) > 1}
+    if leaks:
+        print("WARNING: identical molecules in more than one split:", leaks)
+    manifest["leak_warnings"] = [list(k) + [sorted(v)] for k, v in leaks.items()]
     with open(os.path.join(args.out_dir, "manifest.json"), "w") as f:
         json.dump(manifest, f, indent=2)
     print("written", counts, "->", args.out_dir)

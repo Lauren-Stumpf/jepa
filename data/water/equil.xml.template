@@ -1,7 +1,7 @@
 <simulation verbosity='low'>
   <output prefix='equil'>
     <properties stride='20' filename='out'> [ step, time{picosecond}, conserved{electronvolt}, temperature{kelvin}, kinetic_md{electronvolt}, potential{electronvolt} ] </properties>
-    <checkpoint stride='2000' filename='chk' overwrite='true'/>
+    <checkpoint stride='__EQUIL_STEPS__' filename='chk' overwrite='true'/>
   </output>
   <total_steps> __EQUIL_STEPS__ </total_steps>
   <prng><seed> __SEED__ </seed></prng>
