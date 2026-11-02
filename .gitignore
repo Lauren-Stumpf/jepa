@@ -1,4 +1,5 @@
 *.xyz
+!data/water/water64_init_ipi.xyz
 *.xyz.zst
 *.ckpt
 *.pt
