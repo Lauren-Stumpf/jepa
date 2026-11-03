@@ -19,13 +19,16 @@ dataset standard deviation, MSE loss) computes exactly the paper's loss.
 Anything that reads a trained model must undo the scaling (eval/eval_onestep.py
 does). Raw targets can be kept with --raw_targets.
 
-Molecules stored split across the periodic boundary are UNWRAPPED: atoms are
-placed by walking the bond graph with minimum-image offsets, so the whole
-molecule sits on one side of the box (an exact operation for a periodic
-system). The same shift is applied to the atom's future position. A frame is
-dropped only if the walk cannot reach every atom (fragmented molecule) or if
-an atom's stored displacement exceeds --max_atom_disp (a jump that is not a
-wrap).
+Every frame is UNWRAPPED: atoms are placed by walking the bond graph with
+nearest-image offsets (cutoff --bond_cut, default 3 A; there is only one
+molecule in the box so nothing else can be joined), the whole molecule is
+recentred in the box, and the future position of each atom is placed as
+now (unwrapped) + nearest-image difference (future - now). All of this is
+exact for a periodic system. A frame is dropped only if the walk cannot reach
+every atom (fragmented molecule) or an atom's displacement exceeds
+--max_atom_disp. Frames whose molecule is wider than box minus --model_cutoff
+on some axis (so the model would see the molecule's own image) are counted
+and flagged in the manifest, not dropped.
 
 Usage:
   python data/make_organic_split.py data/universal_8fs.xyz \
@@ -43,29 +46,30 @@ import numpy as np
 import pandas as pd
 
 
-def unwrap_molecule(q, cell_lengths, bond_cut=1.9):
+def nearest_image(d, cell_lengths):
+    return d - cell_lengths * np.round(d / cell_lengths)
+
+
+def unwrap_molecule(q, cell_lengths, bond_cut=3.0):
     """Shift atoms by box vectors so the molecule is connected under no wrapping.
 
-    Returns (shifted positions, shift per atom in A, all_reached flag)."""
+    Walks the bond graph from atom 0; each newly reached atom is placed at its
+    nearest image relative to the atom it was reached from.
+    Returns (unwrapped positions, all_reached flag)."""
     n = len(q)
     out = q.copy()
-    shift = np.zeros_like(q)
     placed = np.zeros(n, dtype=bool)
     placed[0] = True
     frontier = [0]
     while frontier:
         i = frontier.pop()
-        d = q - q[i]                       # raw offsets to every atom
-        img = np.round(d / cell_lengths)   # which periodic image is nearest
-        dmin = d - img * cell_lengths
+        dmin = nearest_image(q - q[i], cell_lengths)
         close = (np.linalg.norm(dmin, axis=1) < bond_cut) & ~placed
         for j in np.where(close)[0]:
-            # place j next to the already-placed i, carrying i's accumulated shift
-            shift[j] = shift[i] - img[j] * cell_lengths
-            out[j] = q[j] + shift[j]
+            out[j] = out[i] + dmin[j]
             placed[j] = True
             frontier.append(j)
-    return out, shift, bool(placed.all())
+    return out, bool(placed.all())
 
 
 def main():
@@ -82,6 +86,10 @@ def main():
     ap.add_argument("--raw_targets", action="store_true", help="store raw future positions/momenta")
     ap.add_argument("--max_atom_disp", type=float, default=2.0,
                     help="drop a frame if any atom moves more than this (A) over the stride")
+    ap.add_argument("--bond_cut", type=float, default=3.0,
+                    help="nearest-image distance below which two atoms are treated as bonded when unwrapping")
+    ap.add_argument("--model_cutoff", type=float, default=4.5,
+                    help="model neighbour cutoff (A); a molecule wider than box minus this sees its own image")
     args = ap.parse_args()
     os.makedirs(args.out_dir, exist_ok=True)
 
@@ -124,7 +132,9 @@ def main():
     counts = {s: 0 for s in writers}
     dropped = {"jump": 0, "fragmented": 0}
     frag_by_formula = {}
+    wide_by_formula = {}
     unwrapped = 0
+    too_wide = 0
     for i, atoms in enumerate(ase.io.iread(args.xyz, index=":", format="extxyz")):
         if i > last_frame:
             break
@@ -135,17 +145,24 @@ def main():
         fut = atoms.arrays["future_positions"]
         if atoms.pbc.any():
             Lc = atoms.cell.lengths()
-            if ((q.max(0) - q.min(0)) > 0.5 * Lc).any():
-                q_new, shift, complete = unwrap_molecule(q, Lc)
-                if not complete:
-                    dropped["fragmented"] += 1
-                    frag_by_formula[atoms.get_chemical_formula()] = frag_by_formula.get(atoms.get_chemical_formula(), 0) + 1
-                    continue
+            q_new, complete = unwrap_molecule(q, Lc, args.bond_cut)
+            if not complete:
+                dropped["fragmented"] += 1
+                frag_by_formula[atoms.get_chemical_formula()] = frag_by_formula.get(atoms.get_chemical_formula(), 0) + 1
+                continue
+            if not np.allclose(q_new, q):
                 unwrapped += 1
-                q = q_new
-                fut = fut + shift
-                atoms.set_positions(q)
-                atoms.arrays["future_positions"] = fut
+            # future placed relative to the unwrapped now, by nearest image of the difference
+            fut = q_new + nearest_image(fut - q, Lc)
+            # recentre the whole molecule (now and future together) inside the box
+            centre_shift = Lc * np.floor(q_new.mean(0) / Lc)
+            q = q_new - centre_shift
+            fut = fut - centre_shift
+            if ((q.max(0) - q.min(0)) > (Lc - args.model_cutoff)).any():
+                too_wide += 1
+                wide_by_formula[atoms.get_chemical_formula()] = wide_by_formula.get(atoms.get_chemical_formula(), 0) + 1
+            atoms.set_positions(q)
+            atoms.arrays["future_positions"] = fut
         dq = fut - q
         if np.abs(dq).max() > args.max_atom_disp:
             dropped["jump"] += 1
@@ -170,15 +187,21 @@ def main():
     for w in writers.values():
         w.close()
 
-    print(f"unwrapped {unwrapped} frames whose molecule straddled the box; dropped: {dropped}")
+    print(f"frames unwrapped (molecule was stored straddling the box): {unwrapped}")
+    print(f"frames wider than box minus model cutoff after unwrapping (kept, flagged): {too_wide}")
+    print(f"dropped: {dropped}")
     if frag_by_formula:
-        top = sorted(frag_by_formula.items(), key=lambda kv: -kv[1])[:10]
-        print("fragmented (unreachable atoms) by molecule, top 10:", top)
+        print("fragmented (unreachable atoms) by molecule, top 10:",
+              sorted(frag_by_formula.items(), key=lambda kv: -kv[1])[:10])
+    if wide_by_formula:
+        print("too-wide by molecule, top 10:", sorted(wide_by_formula.items(), key=lambda kv: -kv[1])[:10])
     manifest = {
         "source": args.xyz, "seed": args.seed, "kind": args.kind, "min_atoms": args.min_atoms,
         "targets": "raw" if args.raw_targets else "mass_scaled",
         "max_atom_disp": args.max_atom_disp, "dropped": dropped,
-        "unwrapped_frames": unwrapped, "fragmented_by_formula": frag_by_formula,
+        "bond_cut": args.bond_cut, "model_cutoff": args.model_cutoff,
+        "unwrapped_frames": unwrapped, "too_wide_frames": too_wide,
+        "fragmented_by_formula": frag_by_formula, "too_wide_by_formula": wide_by_formula,
         "frames": counts,
         "structures": {s: sorted(int(g) for g, v in split.items() if v == s) for s in counts},
         "formulas": {s: sorted(set(per[per["group"].isin([g for g, v in split.items() if v == s])]["formula"]))

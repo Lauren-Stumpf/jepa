@@ -20,16 +20,21 @@ wrapped = chain.copy()
 wrapped[0] += [20.0, 0.0, 0.0]                                          # atom 0 shown on far side
 wrapped[2] -= [0.0, 20.0, 0.0]                                          # atom 2 shown on another side
 
-q, shift, ok = unwrap_molecule(wrapped, L)
+q, ok = unwrap_molecule(wrapped, L)
 assert ok, "walk did not reach every atom"
 # result must be the intact chain up to one common box translation
 delta = q - chain
 assert np.allclose(delta - delta[0], 0.0), f"not rigidly unwrapped: {delta}"
 assert np.allclose(np.round(delta[0] / L) * L, delta[0]), "common offset is not a box vector"
-assert np.allclose(q + 0 * shift, wrapped + shift), "shift inconsistent with positions"
+
+# a stretched 2.5 A bond at high temperature must still be walked (cutoff 3 A)
+stretched = np.array([[1.0, 5.0, 5.0], [3.5, 5.0, 5.0], [6.0, 5.0, 5.0]])
+stretched[1] += [0.0, 0.0, 20.0]
+q, ok = unwrap_molecule(stretched, L)
+assert ok and np.allclose(q[1] - q[0], [2.5, 0, 0]), "stretched bond not followed"
 
 # a genuinely fragmented molecule (atom 2 far from both others) must be reported
 frag = chain.copy(); frag[2] = [9.0, 9.0, 9.0]
-_, _, ok = unwrap_molecule(frag, L)
+_, ok = unwrap_molecule(frag, L)
 assert not ok, "fragmented molecule reported as complete"
 print("unwrap test passed")
