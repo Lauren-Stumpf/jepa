@@ -75,3 +75,50 @@ paper's full MAD mix, so its errors are not comparable with Fig. 8; the fair
 comparison is baseline versus our model on the same test split. The released
 checkpoint was trained on these same structures, so its number on our test
 split is a training-set number.
+
+## 2026-11-03: organic subset preparation rewritten after a third review
+
+A reviewing agent checked the metatrain and i-PI sources and found that the
+unwrapping, recentring and nearest-image placement added over the previous two
+days were unnecessary: metatrain's only geometric input is a neighbour list
+with cell shifts (vesin), which gives bit-identical edge vectors whether or not
+atoms sit inside the box (tested on shifted and triclinic cases); its position
+target is the stored future minus now with no wrapping anywhere; and i-PI
+writes unfolded positions (folding is applied only to the copy sent to the
+force driver). The review also found that dropping 2,395 "fragmented" frames
+had silently changed the distribution the authors trained on, and that the
+selection rules were retyped across five scripts.
+
+Data path now: Zenodo 8 fs file -> data/catalogue.py (one pass, per-frame
+table) -> data/prepare_organic.py -> data/organic8/{train,val,test}.xyz,
+frames.csv, manifest.json. The five selection scripts and test_unwrap.py are
+removed; checks/test_prepare.py covers the new one.
+
+Structure rules (ours, not the paper's; every exclusion is printed and listed
+in manifest.json with its reason): elements within H, C, N, O and containing
+carbon; periodic cell with more than 60 A^3 per atom (the printed distribution
+shows where the threshold sits); non-periodic entries excluded and counted;
+the minimum-atom-count rule is off by default because no reason for it was
+written down; where the file holds the same molecule twice (same formula,
+atom count and cell volume), the lowest group id is kept and the other copy
+excluded, so the model never sees two copies of one molecule. Split: random
+by structure, seed 0, 80/10/10.
+
+Frame rules: none, except exploded reference runs (kinetic temperature above
+5000 K or raw per-atom displacement above 3 A over 8 fs; the distributions
+are printed before the rule is applied). Hot frames where the molecule has
+come apart and structures that see their own periodic image are kept, because
+the authors trained on them and the comparison is baseline versus our model on
+the same frames. The script stops if a kept frame has a raw displacement
+larger than half the shortest cell height (evidence of after-the-fact
+wrapping); none is expected.
+
+Recorded per frame in frames.csv, never used to drop: number of bonded pieces
+(1.25 x covalent radii, periodic), number of neighbour pairs with a nonzero
+cell shift at the model cutoff read from the config yaml, raw max
+displacement, kinetic temperature, split, whether written.
+
+Targets stored mass-scaled with the config masses (largest relative
+difference to the file's masses printed). manifest.json holds sha256 of the
+three xyz files, frames.csv, the catalogue and the config, plus the source
+file size, so both models can be shown to have read identical data.
