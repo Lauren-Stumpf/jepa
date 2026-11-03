@@ -51,7 +51,7 @@ def _is_metatrain_export(model):
     return not any("mtt::delta_" in k for k in model.capabilities().outputs.keys())
 
 
-def _metatrain_one_step(atoms, model, stride_fs, device):
+def _metatrain_one_step(atoms, model, stride_fs, device, scaled_targets):
     # metatrain's FlashMD export: outputs "position" and "momentum" (absolute,
     # unscaled), reads system data "momentum" and "mass", buffer "timestep".
     from metatensor.torch import Labels, TensorBlock, TensorMap
@@ -71,7 +71,9 @@ def _metatrain_one_step(atoms, model, stride_fs, device):
     n = len(atoms)
     samples = Labels(names=["system", "atom"], values=torch.tensor([[0, j] for j in range(n)], device=dev))
     xyz = Labels(names="xyz", values=torch.tensor([[0], [1], [2]], device=dev))
-    for name, arr, comps in (("momentum", atoms.get_momenta(), [xyz]), ("mass", atoms.get_masses(), [])):
+    # only momenta are attached; the model attaches its own masses (verify_masses would
+    # reject the file's i-PI masses against ASE's)
+    for name, arr, comps in (("momentum", atoms.get_momenta(), [xyz]),):
         vals = torch.tensor(arr, dtype=dtype, device=dev).unsqueeze(-1)
         system.add_data(name, TensorMap(keys=Labels.single().to(dev), blocks=[TensorBlock(
             values=vals, samples=samples, components=comps,
@@ -83,12 +85,18 @@ def _metatrain_one_step(atoms, model, stride_fs, device):
         out = model([system], opts, check_consistency=False)
     q = out["position"].block().values.squeeze(-1).detach().cpu().numpy()
     p = out["momentum"].block().values.squeeze(-1).detach().cpu().numpy()
+    if scaled_targets:
+        # model was trained on q + dq*sqrt(m) and p/sqrt(m) (see data/make_organic_split.py)
+        sm = np.sqrt(atoms.get_masses())[:, None]
+        q0 = atoms.get_positions()
+        q = q0 + (q - q0) / sm
+        p = p * sm
     return q, p
 
 
-def flashmd_one_step(atoms, model, stride_fs, device):
+def flashmd_one_step(atoms, model, stride_fs, device, scaled_targets=False):
     if _is_metatrain_export(model):
-        return _metatrain_one_step(atoms, model, stride_fs, device)
+        return _metatrain_one_step(atoms, model, stride_fs, device, scaled_targets)
     # flashmd 0.1.2 universal checkpoints: call the package stepper directly,
     # since ASE's MolecularDynamics.run() demands a force calculator.
     from flashmd.stepper import FlashMDStepper
@@ -131,6 +139,8 @@ def main():
     ap.add_argument("--model", default="pretrained")
     ap.add_argument("--pet_mad_version", default="1.0.0")
     ap.add_argument("--out", default="results/eval/onestep.csv")
+    ap.add_argument("--scaled_targets", action="store_true",
+                    help="the metatrain model was trained on mass-scaled targets (default for data/organic8)")
     ap.add_argument("--max_T", type=float, default=5000.0,
                     help="skip frames whose stored kinetic temperature exceeds this (K)")
     ap.add_argument("--max_disp", type=float, default=5.0,
@@ -168,7 +178,7 @@ def main():
         if model is None:
             q, p = verlet_reference(atoms, calc, args.stride_fs)
         else:
-            q, p = flashmd_one_step(atoms, model, args.stride_fs, device)
+            q, p = flashmd_one_step(atoms, model, args.stride_fs, device, args.scaled_targets)
         dq = q - ref_q
         dp = p - ref_p
         dq_ms = dq * np.sqrt(m)

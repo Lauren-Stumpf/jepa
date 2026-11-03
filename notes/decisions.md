@@ -44,3 +44,34 @@ should be rerun with --every 2500); catalogue grouping merged adjacent
 same-composition structures (cell volume added to the key); configs lacked
 atomic_types; water checkpoint only written when EQUIL_STEPS was a multiple of
 2000; driver launch raced the i-PI socket.
+
+## 2026-11-03: second review, fidelity to the paper's training recipe
+
+Adopted:
+- Targets stored mass-scaled in data/organic8 (future_positions := q + dq*sqrt(m),
+  future_momenta := p'/sqrt(m); input momenta raw). With these, metatrain's
+  PositionAdditive + scaler + MSE computes exactly the paper's Eq. 6, and the
+  logged validation RMSEs are in the paper's units. eval_onestep.py undoes the
+  scaling with --scaled_targets.
+- Per-atom wrap check (any atom displaced > 2 A over the stride) and a
+  molecule-spans-half-the-box check in the split; the rms-based broken filter
+  would have missed a single wrapped atom.
+- Masses set explicitly in the configs to the i-PI values the file was
+  generated with (H 1.00794, C 12.0107, N 14.00674, O 15.9994); metatrain
+  otherwise uses ASE masses and rejects the file's masses at inference.
+- Every epoch's checkpoint kept; final selection by the paper's criterion
+  (position RMSE x momentum RMSE x energy RMSE of predicted structure under
+  PET-MAD 1.0.0) is done afterwards by a separate script.
+- Augmentation check (checks/check_augmentation.py) must pass before training.
+
+Known, accepted differences from the paper (apply equally to baseline and to
+our model): metatrain uses 1% warmup then cosine decay instead of step decay;
+the loss weights each atom equally rather than each structure; no
+centre-of-mass constraint in the model (subtract net momentum per step in the
+rollout evaluator). The Zenodo file (25 pairs per run every 100 fs) is not the
+dataset described in App. B.3 (5 per run every 500 fs); we reproduce the
+released-checkpoint version. The organic-vacuum subset is easier than the
+paper's full MAD mix, so its errors are not comparable with Fig. 8; the fair
+comparison is baseline versus our model on the same test split. The released
+checkpoint was trained on these same structures, so its number on our test
+split is a training-set number.
