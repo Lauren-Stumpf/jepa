@@ -60,20 +60,29 @@ def main():
     sel = per[per["has_C"] & (per["natoms"] >= args.min_atoms)]
     if args.kind != "all":
         sel = sel[sel["kind"] == args.kind]
-    groups = sorted(sel["group"].tolist())
+    # The unit of the split is the MOLECULE, identified by (formula, atom count,
+    # cell volume): the file holds some molecules twice as separate groups, and
+    # both copies must land in the same split or the held-out sets leak.
+    sel = sel.copy()
+    sel["molecule"] = list(zip(sel["formula"], sel["natoms"].astype(int),
+                               (sel["vol_per_atom"] * sel["natoms"]).round(1)))
+    molecules = sorted(set(sel["molecule"]))
     rng = random.Random(args.seed)
-    rng.shuffle(groups)
-    n_val = int(round(len(groups) * args.val_frac))
-    n_test = int(round(len(groups) * args.test_frac))
-    split = {}
-    for g in groups[:n_val]:
-        split[g] = "val"
-    for g in groups[n_val:n_val + n_test]:
-        split[g] = "test"
-    for g in groups[n_val + n_test:]:
-        split[g] = "train"
-    print(f"{len(groups)} structures selected: "
-          f"{sum(v == 'train' for v in split.values())} train, {n_val} val, {n_test} test")
+    rng.shuffle(molecules)
+    n_val = int(round(len(molecules) * args.val_frac))
+    n_test = int(round(len(molecules) * args.test_frac))
+    mol_split = {}
+    for m in molecules[:n_val]:
+        mol_split[m] = "val"
+    for m in molecules[n_val:n_val + n_test]:
+        mol_split[m] = "test"
+    for m in molecules[n_val + n_test:]:
+        mol_split[m] = "train"
+    split = {int(g): mol_split[m] for g, m in zip(sel["group"], sel["molecule"])}
+    groups = sorted(split)
+    dup = len(sel) - len(molecules)
+    print(f"{len(sel)} structures = {len(molecules)} distinct molecules ({dup} duplicate copies): "
+          f"{sum(v == 'train' for v in mol_split.values())} train, {n_val} val, {n_test} test molecules")
 
     cat = pd.read_csv(args.catalogue, usecols=["frame", "group", "broken"])
     cat = cat[cat["group"].isin(list(split))]
@@ -85,6 +94,7 @@ def main():
     writers = {s: open(os.path.join(args.out_dir, f"{s}.xyz"), "w") for s in ("train", "val", "test")}
     counts = {s: 0 for s in writers}
     dropped = {"wrap": 0, "spans_box": 0}
+    spans_by_formula = {}
     for i, atoms in enumerate(ase.io.iread(args.xyz, index=":", format="extxyz")):
         if i > last_frame:
             break
@@ -98,6 +108,7 @@ def main():
             continue
         if atoms.pbc.any() and ((q.max(0) - q.min(0)) > 0.5 * atoms.cell.lengths()).any():
             dropped["spans_box"] += 1
+            spans_by_formula[atoms.get_chemical_formula()] = spans_by_formula.get(atoms.get_chemical_formula(), 0) + 1
             continue
         if not args.raw_targets:
             sm = np.sqrt(atoms.get_masses())[:, None]
@@ -120,10 +131,14 @@ def main():
         w.close()
 
     print("dropped:", dropped)
+    if spans_by_formula:
+        top = sorted(spans_by_formula.items(), key=lambda kv: -kv[1])[:10]
+        print("spans_box drops by molecule (top 10):", top)
     manifest = {
         "source": args.xyz, "seed": args.seed, "kind": args.kind, "min_atoms": args.min_atoms,
         "targets": "raw" if args.raw_targets else "mass_scaled",
         "max_atom_disp": args.max_atom_disp, "dropped": dropped,
+        "spans_box_by_formula": spans_by_formula,
         "frames": counts,
         "structures": {s: sorted(int(g) for g, v in split.items() if v == s) for s in counts},
         "formulas": {s: sorted(set(per[per["group"].isin([g for g, v in split.items() if v == s])]["formula"]))
