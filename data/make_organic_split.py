@@ -19,9 +19,13 @@ dataset standard deviation, MSE loss) computes exactly the paper's loss.
 Anything that reads a trained model must undo the scaling (eval/eval_onestep.py
 does). Raw targets can be kept with --raw_targets.
 
-Also drops frames where any atom's stored displacement exceeds --max_atom_disp
-(a wrap across the periodic box) or where the molecule spans more than half
-the box on any axis.
+Molecules stored split across the periodic boundary are UNWRAPPED: atoms are
+placed by walking the bond graph with minimum-image offsets, so the whole
+molecule sits on one side of the box (an exact operation for a periodic
+system). The same shift is applied to the atom's future position. A frame is
+dropped only if the walk cannot reach every atom (fragmented molecule) or if
+an atom's stored displacement exceeds --max_atom_disp (a jump that is not a
+wrap).
 
 Usage:
   python data/make_organic_split.py data/universal_8fs.xyz \
@@ -37,6 +41,31 @@ import random
 import ase.io
 import numpy as np
 import pandas as pd
+
+
+def unwrap_molecule(q, cell_lengths, bond_cut=1.9):
+    """Shift atoms by box vectors so the molecule is connected under no wrapping.
+
+    Returns (shifted positions, shift per atom in A, all_reached flag)."""
+    n = len(q)
+    out = q.copy()
+    shift = np.zeros_like(q)
+    placed = np.zeros(n, dtype=bool)
+    placed[0] = True
+    frontier = [0]
+    while frontier:
+        i = frontier.pop()
+        d = q - q[i]                       # raw offsets to every atom
+        img = np.round(d / cell_lengths)   # which periodic image is nearest
+        dmin = d - img * cell_lengths
+        close = (np.linalg.norm(dmin, axis=1) < bond_cut) & ~placed
+        for j in np.where(close)[0]:
+            # place j next to the already-placed i, carrying i's accumulated shift
+            shift[j] = shift[i] - img[j] * cell_lengths
+            out[j] = q[j] + shift[j]
+            placed[j] = True
+            frontier.append(j)
+    return out, shift, bool(placed.all())
 
 
 def main():
@@ -93,8 +122,9 @@ def main():
 
     writers = {s: open(os.path.join(args.out_dir, f"{s}.xyz"), "w") for s in ("train", "val", "test")}
     counts = {s: 0 for s in writers}
-    dropped = {"wrap": 0, "spans_box": 0}
-    spans_by_formula = {}
+    dropped = {"jump": 0, "fragmented": 0}
+    frag_by_formula = {}
+    unwrapped = 0
     for i, atoms in enumerate(ase.io.iread(args.xyz, index=":", format="extxyz")):
         if i > last_frame:
             break
@@ -102,13 +132,23 @@ def main():
         if s is None:
             continue
         q = atoms.get_positions()
-        dq = atoms.arrays["future_positions"] - q
+        fut = atoms.arrays["future_positions"]
+        if atoms.pbc.any():
+            Lc = atoms.cell.lengths()
+            if ((q.max(0) - q.min(0)) > 0.5 * Lc).any():
+                q_new, shift, complete = unwrap_molecule(q, Lc)
+                if not complete:
+                    dropped["fragmented"] += 1
+                    frag_by_formula[atoms.get_chemical_formula()] = frag_by_formula.get(atoms.get_chemical_formula(), 0) + 1
+                    continue
+                unwrapped += 1
+                q = q_new
+                fut = fut + shift
+                atoms.set_positions(q)
+                atoms.arrays["future_positions"] = fut
+        dq = fut - q
         if np.abs(dq).max() > args.max_atom_disp:
-            dropped["wrap"] += 1
-            continue
-        if atoms.pbc.any() and ((q.max(0) - q.min(0)) > 0.5 * atoms.cell.lengths()).any():
-            dropped["spans_box"] += 1
-            spans_by_formula[atoms.get_chemical_formula()] = spans_by_formula.get(atoms.get_chemical_formula(), 0) + 1
+            dropped["jump"] += 1
             continue
         if not args.raw_targets:
             sm = np.sqrt(atoms.get_masses())[:, None]
@@ -130,15 +170,15 @@ def main():
     for w in writers.values():
         w.close()
 
-    print("dropped:", dropped)
-    if spans_by_formula:
-        top = sorted(spans_by_formula.items(), key=lambda kv: -kv[1])[:10]
-        print("spans_box drops by molecule (top 10):", top)
+    print(f"unwrapped {unwrapped} frames whose molecule straddled the box; dropped: {dropped}")
+    if frag_by_formula:
+        top = sorted(frag_by_formula.items(), key=lambda kv: -kv[1])[:10]
+        print("fragmented (unreachable atoms) by molecule, top 10:", top)
     manifest = {
         "source": args.xyz, "seed": args.seed, "kind": args.kind, "min_atoms": args.min_atoms,
         "targets": "raw" if args.raw_targets else "mass_scaled",
         "max_atom_disp": args.max_atom_disp, "dropped": dropped,
-        "spans_box_by_formula": spans_by_formula,
+        "unwrapped_frames": unwrapped, "fragmented_by_formula": frag_by_formula,
         "frames": counts,
         "structures": {s: sorted(int(g) for g, v in split.items() if v == s) for s in counts},
         "formulas": {s: sorted(set(per[per["group"].isin([g for g, v in split.items() if v == s])]["formula"]))
