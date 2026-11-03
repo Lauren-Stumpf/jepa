@@ -6,6 +6,9 @@
 # Usage: bash data/water/run_one.sh <seed> <out_dir>
 # Requires i-pi and i-pi-driver (Fortran, built from i-PI's drivers/f90) on PATH.
 set -euo pipefail
+# one core per run: numpy inside i-PI otherwise starts a thread per core, and 20 parallel
+# runs on a 64-core node would start 1280 threads
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 SEED=${1:?seed}
 OUT=${2:?output directory}
 HERE=$(cd "$(dirname "$0")" && pwd)
