@@ -25,8 +25,9 @@ molecule in the box so nothing else can be joined), the whole molecule is
 recentred in the box, and the future position of each atom is placed as
 now (unwrapped) + nearest-image difference (future - now). All of this is
 exact for a periodic system. A frame is dropped only if the walk cannot reach
-every atom (fragmented molecule) or an atom's displacement exceeds
---max_atom_disp. Frames whose molecule is wider than box minus --model_cutoff
+every atom (fragmented molecule), if the unwrapped result is inconsistent
+(the molecule is within --bond_cut of its own periodic image), or if an
+atom's displacement exceeds --max_atom_disp. Frames whose molecule is wider than box minus --model_cutoff
 on some axis (so the model would see the molecule's own image) are counted
 and flagged in the manifest, not dropped.
 
@@ -46,16 +47,23 @@ import numpy as np
 import pandas as pd
 
 
-def nearest_image(d, cell_lengths):
-    return d - cell_lengths * np.round(d / cell_lengths)
+def nearest_image(d, cell):
+    """Nearest-image displacement for any cell (3x3 row-vector matrix): round in
+    fractional coordinates. Exact for displacements shorter than half the
+    shortest cell height."""
+    frac = d @ np.linalg.inv(cell)
+    return d - np.round(frac) @ cell
 
 
-def unwrap_molecule(q, cell_lengths, bond_cut=3.0):
-    """Shift atoms by box vectors so the molecule is connected under no wrapping.
+def unwrap_molecule(q, cell, bond_cut=3.0):
+    """Shift atoms by lattice vectors so the molecule is connected under no wrapping.
 
     Walks the bond graph from atom 0; each newly reached atom is placed at its
-    nearest image relative to the atom it was reached from.
-    Returns (unwrapped positions, all_reached flag)."""
+    nearest image relative to the atom it was reached from. Afterwards checks
+    that every bonded pair in the result sits at its nearest-image separation:
+    this fails only if the molecule is within bond_cut of its own periodic
+    image, in which case the walk may have joined onto the image.
+    Returns (unwrapped positions, all_reached, consistent)."""
     n = len(q)
     out = q.copy()
     placed = np.zeros(n, dtype=bool)
@@ -63,13 +71,17 @@ def unwrap_molecule(q, cell_lengths, bond_cut=3.0):
     frontier = [0]
     while frontier:
         i = frontier.pop()
-        dmin = nearest_image(q - q[i], cell_lengths)
+        dmin = nearest_image(q - q[i], cell)
         close = (np.linalg.norm(dmin, axis=1) < bond_cut) & ~placed
         for j in np.where(close)[0]:
             out[j] = out[i] + dmin[j]
             placed[j] = True
             frontier.append(j)
-    return out, bool(placed.all())
+    complete = bool(placed.all())
+    D = nearest_image((q[:, None, :] - q[None, :, :]).reshape(-1, 3), cell).reshape(n, n, 3)
+    bonded = np.linalg.norm(D, axis=-1) < bond_cut
+    consistent = bool(np.allclose((out[:, None, :] - out[None, :, :])[bonded], D[bonded], atol=1e-6))
+    return out, complete, consistent
 
 
 def main():
@@ -85,7 +97,7 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--raw_targets", action="store_true", help="store raw future positions/momenta")
     ap.add_argument("--max_atom_disp", type=float, default=2.0,
-                    help="drop a frame if any atom moves more than this (A) over the stride")
+                    help="drop a frame if any atom's displacement length over the stride exceeds this (A)")
     ap.add_argument("--bond_cut", type=float, default=3.0,
                     help="nearest-image distance below which two atoms are treated as bonded when unwrapping")
     ap.add_argument("--model_cutoff", type=float, default=4.5,
@@ -130,7 +142,7 @@ def main():
 
     writers = {s: open(os.path.join(args.out_dir, f"{s}.xyz"), "w") for s in ("train", "val", "test")}
     counts = {s: 0 for s in writers}
-    dropped = {"jump": 0, "fragmented": 0}
+    dropped = {"jump": 0, "fragmented": 0, "self_image": 0}
     frag_by_formula = {}
     wide_by_formula = {}
     unwrapped = 0
@@ -143,30 +155,38 @@ def main():
             continue
         q = atoms.get_positions()
         fut = atoms.arrays["future_positions"]
+        flag_unwrapped = flag_wide = False
         if atoms.pbc.any():
+            cell = atoms.cell.array
             Lc = atoms.cell.lengths()
-            q_new, complete = unwrap_molecule(q, Lc, args.bond_cut)
+            q_new, complete, consistent = unwrap_molecule(q, cell, args.bond_cut)
             if not complete:
                 dropped["fragmented"] += 1
                 frag_by_formula[atoms.get_chemical_formula()] = frag_by_formula.get(atoms.get_chemical_formula(), 0) + 1
                 continue
-            if not np.allclose(q_new, q):
-                unwrapped += 1
+            if not consistent:
+                dropped["self_image"] += 1
+                continue
+            flag_unwrapped = not np.allclose(q_new, q)
             # future placed relative to the unwrapped now, by nearest image of the difference
-            fut = q_new + nearest_image(fut - q, Lc)
-            # recentre the whole molecule (now and future together) inside the box
-            centre_shift = Lc * np.floor(q_new.mean(0) / Lc)
+            fut = q_new + nearest_image(fut - q, cell)
+            # recentre the whole molecule (now and future together) inside the cell
+            frac_centre = q_new.mean(0) @ np.linalg.inv(cell)
+            centre_shift = np.floor(frac_centre) @ cell
             q = q_new - centre_shift
             fut = fut - centre_shift
-            if ((q.max(0) - q.min(0)) > (Lc - args.model_cutoff)).any():
-                too_wide += 1
-                wide_by_formula[atoms.get_chemical_formula()] = wide_by_formula.get(atoms.get_chemical_formula(), 0) + 1
-            atoms.set_positions(q)
+            flag_wide = bool(((q.max(0) - q.min(0)) > (Lc - args.model_cutoff)).any())
+            atoms.set_positions(q, apply_constraint=False)
             atoms.arrays["future_positions"] = fut
         dq = fut - q
-        if np.abs(dq).max() > args.max_atom_disp:
+        if np.linalg.norm(dq, axis=1).max() > args.max_atom_disp:
             dropped["jump"] += 1
             continue
+        if flag_unwrapped:
+            unwrapped += 1
+        if flag_wide:
+            too_wide += 1
+            wide_by_formula[atoms.get_chemical_formula()] = wide_by_formula.get(atoms.get_chemical_formula(), 0) + 1
         if not args.raw_targets:
             sm = np.sqrt(atoms.get_masses())[:, None]
             atoms.arrays["future_positions"] = q + dq * sm
