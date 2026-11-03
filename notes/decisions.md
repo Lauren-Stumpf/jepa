@@ -122,3 +122,22 @@ Targets stored mass-scaled with the config masses (largest relative
 difference to the file's masses printed). manifest.json holds sha256 of the
 three xyz files, frames.csv, the catalogue and the config, plus the source
 file size, so both models can be shown to have read identical data.
+
+## 2026-11-03: water pairs from our own q-TIP4P/f runs
+
+data/water/parse_runs.py turns the i-PI runs into FlashMD pairs, one dataset
+per stride (1, 4, 16 fs, as in the paper's water experiments). From each 2 ps
+constant-energy run a pair is taken every 100 fs (the spacing the Zenodo file
+uses), plus its time-reversed copy, so 40 pairs per run per stride. Runs are
+split 80/10/10 by run (frames within a run are correlated), seed 0. Momenta
+are converted from i-PI atomic units to ASE units with the factor verified in
+check_water_run.py; positions stay unfolded as i-PI writes them; targets are
+mass-scaled with the config masses (i-PI's: H 1.00794, O 15.9994). Each
+dataset carries a manifest with the run split and sha256 of the files.
+checks/check_water_pairs.py verifies the pairs against the raw trajectories
+(pairs recovered to 5e-9 A, reversed copies consistent, temperature, no
+box-crossing displacement). Water runs are pinned to one thread each so 20
+can run in parallel on a 64-core node. Still to do on this track: a level 1
+check of the force driver (an independent q-TIP4P/f energy function
+differentiated numerically against the driver's forces) and the comparison
+of diffusion coefficient and vibrational spectrum with published values.
