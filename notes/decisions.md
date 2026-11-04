@@ -141,3 +141,16 @@ can run in parallel on a 64-core node. Still to do on this track: a level 1
 check of the force driver (an independent q-TIP4P/f energy function
 differentiated numerically against the driver's forces) and the comparison
 of diffusion coefficient and vibrational spectrum with published values.
+
+## 2026-11-04: momentum target for the 1 fs water set
+
+metatrain's predict_momenta_as_difference adds the raw current momenta to the
+model's momentum prediction; its documentation recommends it when the stride
+is short against the momentum decorrelation time. From our water run the
+hydrogen velocity autocorrelation first crosses zero at about 5 fs, so 1 fs is
+short and 4 and 16 fs are not: the 1 fs config sets it true, the others false.
+With mass-scaled targets this changes what must be stored: for the 1 fs set
+parse_runs.py stores future_momenta := p0 + (p1 - p0)/sqrt(m) so the residual
+metatrain learns is the mass-scaled momentum change; eval_onestep.py undoes it
+with --momenta_difference, and --config makes the evaluator use the config
+masses (the same ones the data were scaled with) instead of ASE's.

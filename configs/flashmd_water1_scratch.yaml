@@ -19,7 +19,7 @@ architecture:
     d_node: 512
     num_gnn_layers: 3
     num_attention_layers: 2
-    predict_momenta_as_difference: false   # large stride: predict momenta directly (paper)
+    predict_momenta_as_difference: true    # 1 fs is short against the momentum decorrelation time (metatrain docs); parse_runs.py stores the matching target
   training:
     timestep: 1            # fs; copy this file and change timestep + paths for the 1 fs and 4 fs sets
     masses: {1: 1.00794, 8: 15.9994}  # i-PI masses (m_e units in the checkpoint / 1822.888486)

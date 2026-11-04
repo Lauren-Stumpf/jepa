@@ -56,6 +56,11 @@ def main():
     stride_steps = int(round(m["stride_fs"] / DT_FS))
     spacing_steps = int(round(m["spacing_fs"] / DT_FS))
     per_run = m["pairs_per_run"]
+    difference = bool(m.get("momenta_as_difference", False))
+
+    def future_p(a):   # undo the stored momentum target
+        sm = np.sqrt([masses[int(z)] for z in a.numbers])[:, None]
+        return a.get_momenta() + (a.arrays["future_momenta"] - a.get_momenta()) * sm if difference else a.arrays["future_momenta"] * sm
     all_ok = True
 
     runs = m["split"]["runs"]
@@ -87,12 +92,12 @@ def main():
                 sm = np.sqrt([masses[int(z)] for z in fwd.numbers])[:, None]
                 t1 = t0 + stride_steps
                 q1 = fwd.get_positions() + (fwd.arrays["future_positions"] - fwd.get_positions()) / sm
-                p1 = fwd.arrays["future_momenta"] * sm
+                p1 = future_p(fwd)
                 worst_q = max(worst_q, np.abs(fwd.get_positions() - q[t0]).max(), np.abs(q1 - q[t1]).max())
                 worst_p = max(worst_p, np.abs(fwd.get_momenta() - p[t0]).max(), np.abs(p1 - p[t1]).max())
                 q0r = rev.get_positions() + (rev.arrays["future_positions"] - rev.get_positions()) / sm
                 worst_rev = max(worst_rev, np.abs(rev.get_positions() - q1).max(), np.abs(rev.get_momenta() + p1).max(),
-                                np.abs(q0r - fwd.get_positions()).max(), np.abs(rev.arrays["future_momenta"] * sm + fwd.get_momenta()).max())
+                                np.abs(q0r - fwd.get_positions()).max(), np.abs(future_p(rev) + fwd.get_momenta()).max())
                 n_checked += 1
     all_ok &= report(worst_q < 1e-6 and worst_p < 1e-6, "pairs match the trajectory",
                      f"{n_checked} forward pairs; largest position error {worst_q:.1e} A, momentum {worst_p:.1e}")
@@ -108,6 +113,7 @@ def main():
     worst_disp = max(np.linalg.norm((f.arrays["future_positions"] - f.get_positions())
                                     / np.sqrt([masses[int(z)] for z in f.numbers])[:, None], axis=1).max() for f in allf)
     all_ok &= report(worst_disp < half, "no displacement crosses the box", f"largest {worst_disp:.3f} A, half box {half:.2f} A")
+    print(f"momentum target: {'change (predict_momenta_as_difference)' if difference else 'absolute'}")
     print("ALL PASS" if all_ok else "SOME CHECKS FAILED")
 
 

@@ -51,7 +51,7 @@ def _is_metatrain_export(model):
     return not any("mtt::delta_" in k for k in model.capabilities().outputs.keys())
 
 
-def _metatrain_one_step(atoms, model, stride_fs, device, scaled_targets):
+def _metatrain_one_step(atoms, model, stride_fs, device, scaled_targets, momenta_difference=False, masses=None):
     # metatrain's FlashMD export: outputs "position" and "momentum" (absolute,
     # unscaled), reads system data "momentum" and "mass", buffer "timestep".
     from metatensor.torch import Labels, TensorBlock, TensorMap
@@ -86,17 +86,23 @@ def _metatrain_one_step(atoms, model, stride_fs, device, scaled_targets):
     q = out["position"].block().values.squeeze(-1).detach().cpu().numpy()
     p = out["momentum"].block().values.squeeze(-1).detach().cpu().numpy()
     if scaled_targets:
-        # model was trained on q + dq*sqrt(m) and p/sqrt(m) (see data/make_organic_split.py)
-        sm = np.sqrt(atoms.get_masses())[:, None]
+        # model was trained on q + dq*sqrt(m) and p/sqrt(m) (data/prepare_organic.py, data/water/parse_runs.py);
+        # with predict_momenta_as_difference the momentum target was p0 + (p1 - p0)/sqrt(m)
+        m = atoms.get_masses() if masses is None else np.array([masses[int(z)] for z in atoms.numbers])
+        sm = np.sqrt(m)[:, None]
         q0 = atoms.get_positions()
         q = q0 + (q - q0) / sm
-        p = p * sm
+        if momenta_difference:
+            p0 = atoms.get_momenta()
+            p = p0 + (p - p0) * sm
+        else:
+            p = p * sm
     return q, p
 
 
-def flashmd_one_step(atoms, model, stride_fs, device, scaled_targets=False):
+def flashmd_one_step(atoms, model, stride_fs, device, scaled_targets=False, momenta_difference=False, masses=None):
     if _is_metatrain_export(model):
-        return _metatrain_one_step(atoms, model, stride_fs, device, scaled_targets)
+        return _metatrain_one_step(atoms, model, stride_fs, device, scaled_targets, momenta_difference, masses)
     # flashmd 0.1.2 universal checkpoints: call the package stepper directly,
     # since ASE's MolecularDynamics.run() demands a force calculator.
     from flashmd.stepper import FlashMDStepper
@@ -141,6 +147,10 @@ def main():
     ap.add_argument("--out", default="results/eval/onestep.csv")
     ap.add_argument("--scaled_targets", action="store_true",
                     help="the metatrain model was trained on mass-scaled targets (default for data/organic8)")
+    ap.add_argument("--momenta_difference", action="store_true",
+                    help="the model was trained with predict_momenta_as_difference: true (water 1 fs set)")
+    ap.add_argument("--config", default=None,
+                    help="metatrain yaml the model was trained with; its masses are used to undo the scaling")
     ap.add_argument("--max_T", type=float, default=5000.0,
                     help="skip frames whose stored kinetic temperature exceeds this (K)")
     ap.add_argument("--max_disp", type=float, default=5.0,
@@ -148,6 +158,11 @@ def main():
     args = ap.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    masses = None
+    if args.config:
+        import yaml
+        with open(args.config) as f:
+            masses = {int(k): float(v) for k, v in yaml.safe_load(f)["architecture"]["training"]["masses"].items()}
     if args.model == "verlet":
         from pet_mad.calculator import PETMADCalculator
         calc = PETMADCalculator(version=args.pet_mad_version, device=device)
@@ -178,7 +193,8 @@ def main():
         if model is None:
             q, p = verlet_reference(atoms, calc, args.stride_fs)
         else:
-            q, p = flashmd_one_step(atoms, model, args.stride_fs, device, args.scaled_targets)
+            q, p = flashmd_one_step(atoms, model, args.stride_fs, device, args.scaled_targets,
+                                    args.momenta_difference, masses)
         dq = q - ref_q
         dp = p - ref_p
         dq_ms = dq * np.sqrt(m)

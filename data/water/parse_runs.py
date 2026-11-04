@@ -16,7 +16,11 @@ checks/check_water_run.py). Positions are left unfolded, as i-PI writes them.
 Targets are stored mass-scaled (paper Eq. 6) with the masses from the config:
   future_positions := positions + (future - now) * sqrt(m)
   future_momenta   := future_momenta / sqrt(m)
-The input momenta column stays raw. eval/eval_onestep.py --scaled_targets undoes this.
+The input momenta column stays raw. For strides listed in --difference_strides
+(default: 1 fs), whose config sets predict_momenta_as_difference: true, the
+momentum target is instead p0 + (p1 - p0)/sqrt(m), because metatrain then adds
+the raw current momenta to its prediction. eval/eval_onestep.py undoes both
+with --scaled_targets (plus --momenta_difference for the difference sets).
 
 A run is used only if its position and momentum files both hold exactly
 --nve_steps + 1 frames (a complete run). Incomplete runs are listed and skipped.
@@ -82,23 +86,26 @@ def load_run(run_dir, n_expected):
     return q, p * P_AU_TO_ASE, symbols, cells[0]
 
 
-def make_pair(q0, p0, q1, p1, symbols, cell, masses):
-    """One training frame: inputs (q0, p0), mass-scaled targets built from (q1, p1)."""
+def make_pair(q0, p0, q1, p1, symbols, cell, masses, difference=False):
+    """One training frame: inputs (q0, p0), mass-scaled targets built from (q1, p1).
+    difference=True is for a model with predict_momenta_as_difference: metatrain then
+    adds the raw current momenta to its prediction, so the stored target must be
+    p0 + (p1 - p0)/sqrt(m) for the residual it learns to be the mass-scaled change."""
     atoms = Atoms(symbols=symbols, positions=q0, cell=cell, pbc=True)
     atoms.set_momenta(p0)
     sm = np.sqrt([masses[int(z)] for z in atoms.numbers])[:, None]
     atoms.arrays["future_positions"] = q0 + (q1 - q0) * sm
-    atoms.arrays["future_momenta"] = p1 / sm
+    atoms.arrays["future_momenta"] = p0 + (p1 - p0) / sm if difference else p1 / sm
     return atoms
 
 
-def pairs_from_run(q, p, symbols, cell, masses, stride_steps, spacing_steps):
+def pairs_from_run(q, p, symbols, cell, masses, stride_steps, spacing_steps, difference=False):
     """Forward pairs every spacing_steps, each followed by its time-reversed copy."""
     out = []
     for t0 in range(0, len(q) - stride_steps, spacing_steps):
         t1 = t0 + stride_steps
-        out.append(make_pair(q[t0], p[t0], q[t1], p[t1], symbols, cell, masses))
-        out.append(make_pair(q[t1], -p[t1], q[t0], -p[t0], symbols, cell, masses))
+        out.append(make_pair(q[t0], p[t0], q[t1], p[t1], symbols, cell, masses, difference))
+        out.append(make_pair(q[t1], -p[t1], q[t0], -p[t0], symbols, cell, masses, difference))
     return out
 
 
@@ -120,6 +127,8 @@ def main():
     ap.add_argument("config", help="metatrain yaml; masses are read from it")
     ap.add_argument("--strides", type=float, nargs="+", default=[1.0, 4.0, 16.0], help="fs")
     ap.add_argument("--spacing", type=float, default=100.0, help="fs between successive pairs from one run")
+    ap.add_argument("--difference_strides", type=float, nargs="*", default=[1.0],
+                    help="strides (fs) whose config uses predict_momenta_as_difference: true")
     ap.add_argument("--nve_steps", type=int, default=8000)
     ap.add_argument("--out_root", default="data/water/pairs")
     ap.add_argument("--seed", type=int, default=0)
@@ -151,13 +160,14 @@ def main():
         os.makedirs(out_dir, exist_ok=True)
         writers = {s: open(os.path.join(out_dir, f"{s}.xyz"), "w") for s in ("train", "val", "test")}
         strides.append({"stride": stride, "steps": stride_steps, "dir": out_dir, "writers": writers,
-                        "counts": {s: 0 for s in writers}, "max_disp": 0.0})
+                        "counts": {s: 0 for s in writers}, "max_disp": 0.0,
+                        "difference": any(abs(stride - d) < 1e-9 for d in args.difference_strides)})
     half_box = np.inf
     for k, name in enumerate(complete):   # runs are read one at a time (each is ~75 MB per file)
         q, p, symbols, cell = load_run(os.path.join(args.runs_root, name), n_expected)
         half_box = min(half_box, 0.5 * float(min(cell)))
         for st in strides:
-            pairs = pairs_from_run(q, p, symbols, cell, masses, st["steps"], spacing_steps)
+            pairs = pairs_from_run(q, p, symbols, cell, masses, st["steps"], spacing_steps, st["difference"])
             for a in pairs:
                 sm = np.sqrt([masses[int(z)] for z in a.numbers])[:, None]
                 raw = (a.arrays["future_positions"] - a.get_positions()) / sm
@@ -173,6 +183,7 @@ def main():
         manifest = {
             "stride_fs": st["stride"], "spacing_fs": args.spacing, "dt_fs": DT_FS, "nve_steps": args.nve_steps,
             "time_reversed_copies": True, "targets": "mass-scaled (Eq. 6) with config masses; input momenta raw",
+            "momenta_as_difference": st["difference"],
             "momentum_unit_conversion_au_to_ase": P_AU_TO_ASE, "masses": masses,
             "config": {"path": args.config, "sha256": sha256(args.config)},
             "split": {"by": "run", "seed": args.seed, "runs": {s: sorted(r for r, v in split.items() if v == s) for s in st["counts"]}},
@@ -183,7 +194,8 @@ def main():
         }
         with open(os.path.join(st["dir"], "manifest.json"), "w") as f:
             json.dump(manifest, f, indent=2)
-        print(f"stride {st['stride']:g} fs: {st['counts']} pairs ({manifest['pairs_per_run']} per run), "
+        print(f"stride {st['stride']:g} fs ({'momentum change' if st['difference'] else 'momentum'} target): "
+              f"{st['counts']} pairs ({manifest['pairs_per_run']} per run), "
               f"largest raw displacement {st['max_disp']:.3f} A -> {st['dir']}")
 
 
