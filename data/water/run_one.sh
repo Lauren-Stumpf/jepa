@@ -16,12 +16,18 @@ EQUIL_STEPS=${EQUIL_STEPS:-10000}   # 10000 x 0.5 fs = 5 ps
 NVE_STEPS=${NVE_STEPS:-8000}        # 8000 x 0.25 fs = 2 ps
 ADDR="qtip4pf_${SEED}_$$"
 
-wait_for_socket() {  # i-PI creates /tmp/ipi_<address>; the driver exits if it is not there yet
-  for _ in $(seq 1 120); do
+wait_for_socket() {  # i-PI creates /tmp/ipi_<address>; the driver exits if it is not there yet.
+  # $1 = socket address, $2 = i-PI pid, $3 = i-PI log. Startup can take minutes when many
+  # runs import i-PI at once from network storage, so wait up to 20 minutes, but stop as
+  # soon as i-PI itself has died.
+  for _ in $(seq 1 2400); do
     [ -S "/tmp/ipi_$1" ] && return 0
+    if ! kill -0 "$2" 2>/dev/null; then
+      echo "i-PI exited before opening socket /tmp/ipi_$1; last lines of $3:"; tail -5 "$3"; exit 1
+    fi
     sleep 0.5
   done
-  echo "i-PI socket /tmp/ipi_$1 did not appear"; exit 1
+  echo "i-PI socket /tmp/ipi_$1 did not appear within 20 minutes"; exit 1
 }
 
 mkdir -p "$OUT" && cd "$OUT"
@@ -31,7 +37,7 @@ sed -e "s|__SEED__|$SEED|; s|__ADDRESS__|$ADDR|; s|__EQUIL_STEPS__|$EQUIL_STEPS|
     "$HERE/equil.xml.template" > equil.xml
 i-pi equil.xml > equil.log 2>&1 &
 IPI=$!
-wait_for_socket "$ADDR"
+wait_for_socket "$ADDR" "$IPI" equil.log
 i-pi-driver -u -a "$ADDR" -m qtip4pf > driver_equil.log 2>&1 &
 wait $IPI
 # checkpoint stride equals EQUIL_STEPS, so equil.chk is the final state
@@ -42,7 +48,7 @@ sed -e "s|__SEED__|$SEED|; s|__ADDRESS__|${ADDR}_nve|; s|__NVE_STEPS__|$NVE_STEP
     "$HERE/nve.xml.template" > nve.xml
 i-pi nve.xml > nve.log 2>&1 &
 IPI=$!
-wait_for_socket "${ADDR}_nve"
+wait_for_socket "${ADDR}_nve" "$IPI" nve.log
 i-pi-driver -u -a "${ADDR}_nve" -m qtip4pf > driver_nve.log 2>&1 &
 wait $IPI
 echo "seed $SEED done: $(wc -l < nve.out) property lines"
