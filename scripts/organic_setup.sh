@@ -9,7 +9,7 @@ CFG=configs/flashmd_organic8_scratch.yaml
 step() { echo; echo "=== $1"; }
 
 step "0. catalogue present"
-[ "$(wc -l < $CAT)" -eq 1000001 ] || { echo "catalogue has $(wc -l < $CAT) lines, expected 1000001; rerun data/catalogue.py"; exit 1; }
+[ "$(wc -l < $CAT)" -eq 5000001 ] || { echo "catalogue has $(wc -l < $CAT) lines, expected 5000001 (10,000 structures x 500 frames); rerun data/catalogue.py"; exit 1; }
 
 step "1. unit tests"
 python checks/test_prepare.py | tail -1
