@@ -6,6 +6,8 @@
 # Usage: bash data/water/run_one.sh <seed> <out_dir>
 # Requires i-pi and i-pi-driver (Fortran, built from i-PI's drivers/f90) on PATH.
 set -euo pipefail
+# if this script dies for any reason, take its i-PI and driver with it (no orphans holding files open)
+trap 'kill $(jobs -p) 2>/dev/null' EXIT
 # one core per run: numpy inside i-PI otherwise starts a thread per core, and 20 parallel
 # runs on a 64-core node would start 1280 threads
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
@@ -27,7 +29,7 @@ wait_for_socket() {  # i-PI creates /tmp/ipi_<address>; the driver exits if it i
     fi
     sleep 0.5
   done
-  echo "i-PI socket /tmp/ipi_$1 did not appear within 20 minutes"; exit 1
+  echo "i-PI socket /tmp/ipi_$1 did not appear within 20 minutes"; kill "$2" 2>/dev/null; exit 1
 }
 
 mkdir -p "$OUT" && cd "$OUT"
