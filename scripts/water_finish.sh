@@ -35,7 +35,7 @@ step "3. check the pairs against the raw trajectories"
 for s in 1 4 16; do python checks/check_water_pairs.py data/water/pairs/${s}fs $ROOT | tail -1 | grep -q "ALL PASS" || { echo "pairs check failed for ${s} fs"; exit 1; }; done
 echo "all pairs checks pass"
 
-step "done: commit the manifests, then launch the water baselines (one GPU each; check nvidia-smi first):"
+step "done: commit the manifests, then launch the water baselines (one GPU each; check nvidia-smi first; source env_train.sh):"
 echo "  git add data/water/pairs/*/manifest.json && git commit -m 'water pairs prepared' && git push"
 echo "  CUDA_VISIBLE_DEVICES=1 mtt train configs/flashmd_water16_scratch.yaml -o results/models/flashmd_water16_scratch.pt"
 echo "  CUDA_VISIBLE_DEVICES=2 mtt train configs/flashmd_water4_scratch.yaml  -o results/models/flashmd_water4_scratch.pt"

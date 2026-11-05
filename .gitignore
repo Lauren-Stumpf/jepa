@@ -8,3 +8,4 @@ __pycache__/
 .venv/
 outputs/
 wandb/
+.venv-train/

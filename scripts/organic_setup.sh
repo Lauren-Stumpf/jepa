@@ -21,15 +21,16 @@ grep -q "'train': 84000" results/data/prepare_organic.log || { echo "unexpected 
 step "3. smoke subset"
 python data/make_smoke_subset.py data/organic8 --every 20
 
-step "4. packages"
-uv pip install -q metatrain wandb plotly
-python -c "import metatrain, wandb; print('metatrain', metatrain.__version__)"
+step "4. training environment (metatrain with the FlashMD trainer)"
+[ -d /storage3/lauren/code/jepa/.venv-train ] || bash scripts/make_train_venv.sh
+source env_train.sh
+python -c "import metatrain, metatrain.experimental.flashmd; print('metatrain', metatrain.__version__)"
 
 step "5. wandb login (skipped if already logged in)"
 wandb login 2>&1 | tail -1
 
 step "6. augmentation check"
-python checks/check_augmentation.py | tee /tmp/aug.txt
+python checks/check_augmentation.py data/organic8/val.xyz | tee /tmp/aug.txt
 grep -q "OK" /tmp/aug.txt || { echo "augmentation check did not print OK"; exit 1; }
 
 step "7. smoke training (2 epochs on the subset)"
@@ -42,5 +43,5 @@ python eval/eval_onestep.py data/organic8/test.xyz --model results/models/smoke.
 
 step "done: everything passed; commit the log and manifest, then launch the full baseline:"
 echo "  git add results/data/prepare_organic.log data/organic8/manifest.json && git commit -m 'organic subset prepared' && git push"
-echo "  tmux new -s organic_train"
+echo "  tmux new -s organic_train   (then: source env_train.sh)"
 echo "  mtt train $CFG -o results/models/flashmd_organic8_scratch.pt"
