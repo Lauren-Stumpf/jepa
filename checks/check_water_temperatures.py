@@ -20,7 +20,7 @@ import numpy as np
 
 root = sys.argv[1]
 target = 300.0
-names, means = [], []
+names, means, first, last = [], [], [], []
 for d in sorted(glob.glob(os.path.join(root, "run_*"))):
     f = os.path.join(d, "nve.out")
     if not os.path.exists(f):
@@ -28,6 +28,8 @@ for d in sorted(glob.glob(os.path.join(root, "run_*"))):
     out = np.loadtxt(f, comments="#")
     names.append(os.path.basename(d))
     means.append(out[:, 3].mean())   # column 3: temperature{kelvin}
+    q = len(out) // 4
+    first.append(out[:q, 3].mean()); last.append(out[-q:, 3].mean())
 means = np.array(means)
 mu, sd = means.mean(), means.std(ddof=1)
 sem = sd / np.sqrt(len(means))
@@ -42,10 +44,17 @@ z_max_expected = np.sqrt(2 * np.log(len(means)))
 ok_centre = abs(mu - target) < 4 * sem + 2.0
 ok_spread = 0.5 * expected_sd < sd < 2.0 * expected_sd
 ok_tail = np.abs(z).max() < z_max_expected + 1.5
+# Started from equilibrium, constant-energy dynamics cannot change the average over runs:
+# the run-averaged temperature must be flat in time. A drift means the starts were not equilibrated.
+drift = np.array(last) - np.array(first)
+drift_se = drift.std(ddof=1) / np.sqrt(len(drift))
+ok_flat = abs(drift.mean()) < 3 * drift_se + 0.5
 for ok, name, detail in [
     (ok_centre, "centred on 300 K", f"{mu:.1f} K"),
     (ok_spread, "spread of run means", f"{sd:.1f} K vs estimate {expected_sd:.1f} K"),
+    (ok_flat, "run-averaged temperature flat in time (equilibrated starts)",
+     f"last quarter minus first quarter {drift.mean():+.2f} +- {drift_se:.2f} K"),
     (ok_tail, "no outlier beyond chance", f"largest |z| {np.abs(z).max():.1f}, typical largest for {len(means)} runs {z_max_expected:.1f}"),
 ]:
     print(f"[{'PASS' if ok else 'FAIL'}] {name}: {detail}")
-print("ALL PASS" if (ok_centre and ok_spread and ok_tail) else "SOME CHECKS FAILED")
+print("ALL PASS" if (ok_centre and ok_spread and ok_tail and ok_flat) else "SOME CHECKS FAILED")

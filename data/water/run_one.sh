@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One q-TIP4P/f water run following the FlashMD water protocol:
-#   5 ps Langevin equilibration at 300 K (0.5 fs, tau 10 fs), then
+#   Langevin equilibration at 300 K (0.5 fs) from an equilibrated structure, then
 #   2 ps constant-energy production (0.25 fs) with positions and momenta every step.
 #
 # Usage: bash data/water/run_one.sh <seed> <out_dir>
@@ -14,7 +14,12 @@ export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 SEED=${1:?seed}
 OUT=${2:?output directory}
 HERE=$(cd "$(dirname "$0")" && pwd)
-EQUIL_STEPS=${EQUIL_STEPS:-10000}   # 10000 x 0.5 fs = 5 ps
+# Equilibration per run, starting from the structure equilibrated by run_pilot.sh (as in
+# FlashMD App. B.3). Length and coupling are set from the pilot's relaxation time; see
+# notes/decisions.md (2026-11-05). Override with EQUIL_STEPS / TAU_FS.
+EQUIL_STEPS=${EQUIL_STEPS:-50000}   # 50000 x 0.5 fs = 25 ps
+TAU_FS=${TAU_FS:-100}               # Langevin time constant (fs)
+INIT=${INIT:-/storage3/lauren/data/water_pilot/water64_equilibrated.xyz}
 NVE_STEPS=${NVE_STEPS:-8000}        # 8000 x 0.25 fs = 2 ps
 ADDR="qtip4pf_${SEED}_$$"
 
@@ -33,9 +38,10 @@ wait_for_socket() {  # i-PI creates /tmp/ipi_<address>; the driver exits if it i
 }
 
 mkdir -p "$OUT" && cd "$OUT"
-cp "$HERE/water64_init_ipi.xyz" init.xyz
+[ -f "$INIT" ] || { echo "no equilibrated start $INIT: run data/water/run_pilot.sh first"; exit 1; }
+cp "$INIT" init.xyz
 
-sed -e "s|__SEED__|$SEED|; s|__ADDRESS__|$ADDR|; s|__EQUIL_STEPS__|$EQUIL_STEPS|; s|__INIT_XYZ__|init.xyz|" \
+sed -e "s|__SEED__|$SEED|; s|__ADDRESS__|$ADDR|; s|__EQUIL_STEPS__|$EQUIL_STEPS|; s|__TAU__|$TAU_FS|; s|__INIT_XYZ__|init.xyz|" \
     "$HERE/equil.xml.template" > equil.xml
 i-pi equil.xml > equil.log 2>&1 &
 IPI=$!

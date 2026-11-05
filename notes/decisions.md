@@ -169,3 +169,45 @@ the protocol produces. The per-run test now only catches gross errors (60 K),
 and checks/check_water_temperatures.py tests across all runs that the means are
 centred on 300 K, that their spread matches the estimate, and that no run is an
 outlier beyond what chance gives for 280 runs.
+
+## 2026-11-05: water runs were not equilibrated; regenerated with equilibrated starts
+
+Finding: the 280 first-generation runs average 294.7 +- 0.7 K, and the
+run-averaged temperature falls by 5.4 +- 0.4 K during the 2 ps constant-energy
+stage (297.7 K first 0.5 ps, 292.2 K last 0.5 ps), while the thermostatted
+stage ends at 300.0 +- 0.1 K with no jump at the switch-over and the potential
+energy is still rising (+51 +- 16 meV per box per ps) at the end of
+equilibration. From equilibrium starts, constant-energy dynamics cannot change
+the run average, so the starts were not equilibrated: every run began from the
+same external file and had only 5 ps of strongly damped Langevin dynamics
+(tau 10 fs slows structural relaxation). An independent review agreed and ruled
+out a time-step effect (a fixed offset, and measured drift is ~200 times
+smaller), thermostat artefacts on sampling, the 3N vs 3N-3 convention, and the
+force driver. It also found that FlashMD did not equilibrate from an outside
+file: App. B.3 equilibrates a structure at experimental density with the same
+force field first, then uses 5 ps of Langevin (0.5 fs, tau 10 fs) to bring it to
+each temperature, then 2 ps constant energy at 0.25 fs. And that sharing one
+barely relaxed start makes the runs less independent than the split by run
+assumes.
+
+The training pairs from the first generation are exact constant-energy dynamics,
+but not at equilibrium at 300 K and not independent across runs, so they are
+not used (kept at /storage3/lauren/data/water_v1_5ps_unequilibrated).
+
+New protocol:
+1. Density set to experimental (0.997 g/cm3, box 12.430 A, as in App. B.3; the
+   developers' file was 1.010 g/cm3), by moving whole molecules (bonds unchanged;
+   data/water/make_start.py).
+2. One 100 ps pilot equilibration (stochastic velocity rescaling thermostat,
+   tau 100 fs, which does not slow structural relaxation); its potential energy
+   curve is fitted to measure the relaxation time (checks/water_equil_curve.py),
+   and its last frame becomes the common equilibrated start.
+3. Each run: 25 ps Langevin at 300 K (0.5 fs, tau 100 fs) from that start with
+   its own seed, so runs decorrelate (separate seeds diverge within ~1 ps;
+   hydrogen-bond and rotational relaxation take ~1-5 ps), then the unchanged
+   2 ps constant-energy production. Langevin is kept as in the paper; tau is
+   100 fs rather than 10 fs because the equilibration has to relax structure,
+   not only reheat it. The 25 ps is checked against the pilot's relaxation time
+   before the runs are made.
+4. checks/check_water_temperatures.py now also tests that the run-averaged
+   temperature is flat in time, which is the test that detects this problem.

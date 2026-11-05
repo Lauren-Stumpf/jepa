@@ -18,7 +18,7 @@
     <motion mode='dynamics'>
       <dynamics mode='nvt'>
         <timestep units='femtosecond'> 0.5 </timestep>
-        <thermostat mode='langevin'><tau units='femtosecond'> 10 </tau></thermostat>
+        <thermostat mode='langevin'><tau units='femtosecond'> __TAU__ </tau></thermostat>
       </dynamics>
     </motion>
   </system>

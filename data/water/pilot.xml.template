@@ -1,0 +1,26 @@
+<simulation verbosity='low'>
+  <output prefix='pilot'>
+    <properties stride='20' filename='out'> [ step, time{picosecond}, conserved{electronvolt}, temperature{kelvin}, kinetic_md{electronvolt}, potential{electronvolt} ] </properties>
+    <trajectory filename='pos' stride='2000' format='xyz' cell_units='atomic_unit'> positions{atomic_unit} </trajectory>
+  </output>
+  <total_steps> __STEPS__ </total_steps>
+  <prng><seed> 12345 </seed></prng>
+  <ffsocket name='qtip4pf' mode='unix' pbc='false'>
+    <address> __ADDRESS__ </address>
+  </ffsocket>
+  <system>
+    <initialize nbeads='1'>
+      <file mode='xyz'> __INIT_XYZ__ </file>
+      <velocities mode='thermal' units='kelvin'> 300 </velocities>
+    </initialize>
+    <forces><force forcefield='qtip4pf'/></forces>
+    <ensemble><temperature units='kelvin'> 300 </temperature></ensemble>
+    <motion mode='dynamics'>
+      <dynamics mode='nvt'>
+        <timestep units='femtosecond'> 0.5 </timestep>
+        <!-- global (stochastic velocity rescaling) thermostat: does not slow structural relaxation -->
+        <thermostat mode='svr'><tau units='femtosecond'> 100 </tau></thermostat>
+      </dynamics>
+    </motion>
+  </system>
+</simulation>
