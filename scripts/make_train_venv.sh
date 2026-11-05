@@ -8,9 +8,15 @@
 #   source env_train.sh                  (every login where you train or evaluate our models)
 set -euo pipefail
 VENV=/storage3/lauren/code/jepa/.venv-train
-uv venv "$VENV" --python 3.11
+# torrnode12's NVIDIA driver supports CUDA 12.1 at most, so torch must be a build for an
+# older CUDA than the default PyPI wheel (which needs a newer driver). torch 2.7.1 built for
+# CUDA 11.8 runs on this driver and supports the Quadro RTX 6000; metatensor-torch and
+# metatomic-torch accept torch 2.3 to 2.14. The constraint stops later installs replacing it.
+uv venv "$VENV" --python 3.11 --clear
 source "$VENV/bin/activate"
-uv pip install "metatrain==2026.4.1" wandb plotly pandas pyyaml scipy ase
+uv pip install "torch==2.7.1" --index-url https://download.pytorch.org/whl/cu118
+echo "torch==2.7.1" > "$VENV/constraints.txt"
+uv pip install -c "$VENV/constraints.txt" "metatrain==2026.4.1" wandb plotly pandas pyyaml scipy ase
 python - <<'PY'
 import torch, metatrain
 print("metatrain", metatrain.__version__, "| torch", torch.__version__, "| CUDA build", torch.version.cuda)
