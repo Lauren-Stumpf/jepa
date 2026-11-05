@@ -19,14 +19,18 @@ if [ -n "$missing" ]; then
 fi
 echo "all $N runs complete"
 
-step "1. the seven checks on every run (about a minute per run)"
+step "1. the seven checks on every run (about a minute per run; SKIP_RUN_CHECKS=1 to skip if already done)"
 fails=0
-for d in $ROOT/run_*; do
-  n=$(python checks/check_water_run.py $d | grep -c FAIL || true)
+[ "${SKIP_RUN_CHECKS:-0}" = 1 ] || for d in $ROOT/run_*; do
+  n=$(python checks/check_water_run.py $d | grep -c "^\[FAIL\]" || true)
   [ "$n" -eq 0 ] || { echo "FAIL in $d ($n checks)"; fails=$((fails+1)); }
 done
 [ "$fails" -eq 0 ] || { echo "$fails runs failed checks; inspect them before parsing"; exit 1; }
 echo "all runs pass"
+
+step "1b. run-mean temperatures across all runs (centre, spread, outliers)"
+python checks/check_water_temperatures.py $ROOT | tee /tmp/water_T.txt
+grep -q "ALL PASS" /tmp/water_T.txt || { echo "temperature distribution check failed"; exit 1; }
 
 step "2. parse into pairs at 1, 4 and 16 fs"
 python data/water/parse_runs.py $ROOT configs/flashmd_water16_scratch.yaml --out_root data/water/pairs

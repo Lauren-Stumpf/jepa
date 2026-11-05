@@ -154,3 +154,18 @@ parse_runs.py stores future_momenta := p0 + (p1 - p0)/sqrt(m) so the residual
 metatrain learns is the mass-scaled momentum change; eval_onestep.py undoes it
 with --momenta_difference, and --config makes the evaluator use the config
 masses (the same ones the data were scaled with) instead of ASE's.
+
+## 2026-11-05: water run 070 and the temperature check
+
+Of 280 runs, 279 passed all seven per-run checks; run 070 failed only the
+temperature test (run-mean 264 K against a 30 K tolerance; energy conservation,
+units, structure and drift all pass). The per-run tolerance was wrong, not the
+run: a constant-energy run's mean temperature is set by its total energy when
+the thermostat is switched off, which is a random draw, so run means spread by
+roughly 12 K (300 K / sqrt(heat capacity of 64 flexible waters in units of k)).
+264 K is about 3 of those below 300 K, which among 280 runs is expected about
+once. The run is kept: removing the tails would narrow the energy distribution
+the protocol produces. The per-run test now only catches gross errors (60 K),
+and checks/check_water_temperatures.py tests across all runs that the means are
+centred on 300 K, that their spread matches the estimate, and that no run is an
+outlier beyond what chance gives for 280 runs.

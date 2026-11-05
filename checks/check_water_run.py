@@ -98,8 +98,13 @@ def main():
     # 2. temperature
     t_mean, t_std = temp.mean(), temp.std()
     expected_std = args.target_T * np.sqrt(2.0 / (3 * n_atoms))
+    # The run-mean temperature of one constant-energy run is not fixed at 300 K: it is set by
+    # the total energy at the moment the thermostat is switched off, which itself fluctuates
+    # from run to run (by roughly 12 K for 64 flexible waters). So this per-run test only
+    # catches gross errors (60 K); whether the runs are centred on 300 K with the right spread
+    # is tested across all runs by checks/check_water_temperatures.py.
     ok_all &= report("temperature",
-                     abs(t_mean - args.target_T) < 30 and 0.3 * expected_std < t_std < 3 * expected_std,
+                     abs(t_mean - args.target_T) < 60 and 0.3 * expected_std < t_std < 3 * expected_std,
                      f"mean {t_mean:.1f} K, std {t_std:.1f} K (expected ~{expected_std:.1f} K for {n_atoms} atoms)")
 
     # 3. momenta synchronous with positions (central difference)
