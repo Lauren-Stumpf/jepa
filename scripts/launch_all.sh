@@ -14,13 +14,17 @@ flashmd_water16_scratch configs/flashmd_water16_scratch.yaml
 flashmd_water4_scratch configs/flashmd_water4_scratch.yaml
 flashmd_water1_scratch configs/flashmd_water1_scratch.yaml
 jepa_pretrain_organic8 PRETRAIN
+jepa_pretrain_indep_organic8 PRETRAIN:--independent_rotations
 jepa_finetune_organic8 configs/jepa_finetune_organic8.yaml
 flashmd_organic8_scratch_10pct_s0 configs/flashmd_organic8_scratch_10pct_s0.yaml
 flashmd_organic8_scratch_10pct_s1 configs/flashmd_organic8_scratch_10pct_s1.yaml
 flashmd_organic8_scratch_10pct_s2 configs/flashmd_organic8_scratch_10pct_s2.yaml
 jepa_finetune_organic8_10pct_s0 configs/jepa_finetune_organic8_10pct_s0.yaml
 jepa_finetune_organic8_10pct_s1 configs/jepa_finetune_organic8_10pct_s1.yaml
-jepa_finetune_organic8_10pct_s2 configs/jepa_finetune_organic8_10pct_s2.yaml"
+jepa_finetune_organic8_10pct_s2 configs/jepa_finetune_organic8_10pct_s2.yaml
+jepa_finetune_indep_organic8_10pct_s0 configs/jepa_finetune_indep_organic8_10pct_s0.yaml
+jepa_finetune_indep_organic8_10pct_s1 configs/jepa_finetune_indep_organic8_10pct_s1.yaml
+jepa_finetune_indep_organic8_10pct_s2 configs/jepa_finetune_indep_organic8_10pct_s2.yaml"
 FREE_MB=${FREE_MB:-500}       # a GPU nobody uses: less than this much memory in use
 RUNS_PER_GPU=${RUNS_PER_GPU:-3}   # our runs use ~4 GB each on 46 GB cards, so several can share one
 # GPUs already used by our own running supervisors (each writes its index to results/runs/<name>/gpu)
@@ -40,7 +44,8 @@ pick_gpu() {  # a GPU is eligible if it is empty, or if only our runs are on it 
 echo "$(date '+%F %T') launch_all"
 while read -r name cfg; do
   [ -z "$name" ] && continue
-  if [ "$cfg" = PRETRAIN ]; then
+  case "$cfg" in PRETRAIN*) is_pretrain=1;; *) is_pretrain=0;; esac
+  if [ "$is_pretrain" = 1 ]; then
     done_file="results/runs/$name/manifest.json"
   else
     done_file="results/runs/$name/model.pt"
@@ -49,7 +54,7 @@ while read -r name cfg; do
   fi
   if [ -f "$done_file" ]; then echo "  $name: finished"; continue; fi
   if tmux has-session -t "train_$name" 2>/dev/null; then echo "  $name: already running"; continue; fi
-  if [ "$cfg" != PRETRAIN ]; then
+  if [ "$is_pretrain" = 0 ]; then
     if [ ! -s "$train_file" ]; then echo "  $name: no training data yet ($train_file), skipped"; continue; fi
     if [ -n "$ckpt" ] && [ ! -s "$ckpt" ]; then echo "  $name: pretrained checkpoint not ready ($ckpt), skipped"; continue; fi
   fi
@@ -61,8 +66,9 @@ while read -r name cfg; do
   done
   [ -z "$gpu" ] && { echo "  $name: no GPU after 24 h, skipped"; continue; }
   ours="$ours $gpu"
-  if [ "$cfg" = PRETRAIN ]; then
-    tmux new-session -d -s "train_$name" "bash $REPO/scripts/pretrain_supervisor.sh $name $gpu"
+  if [ "$is_pretrain" = 1 ]; then
+    extra=${cfg#PRETRAIN}; extra=${extra#:}
+    tmux new-session -d -s "train_$name" "bash $REPO/scripts/pretrain_supervisor.sh $name $gpu $extra"
   else
     tmux new-session -d -s "train_$name" "bash $REPO/scripts/train_supervisor.sh $name $cfg $gpu"
   fi

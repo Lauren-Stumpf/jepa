@@ -18,12 +18,14 @@ Loss (VICReg, Bardes, Ponce, LeCun 2022), on per-atom vectors over a batch:
 Gradients flow through both branches; there is no exponential-moving-average target
 encoder and no stop-gradient.
 
-Augmentation: the current and the future frame of a pair each get their own independent
-random rotation or improper rotation (positions, cell and momenta). Independent, not
-shared, because a molecule barely turns in one stride: with a shared rotation the
-absolute orientation would be a high-variance, perfectly predictable feature and the
-predictor could satisfy the loss from it alone. (--shared_rotation restores the shared
-version for comparison.)
+Augmentation: the same random rotation or improper rotation is applied to both frames
+of a pair (positions, cell and momenta), as in FlashMD training. Shared rather than
+independent because the FlashMD heads are linear maps from the features to Cartesian
+vectors, so the features must keep orientation; independent rotations would train the
+encoder to discard it. The possible shortcut (orientation itself as a predictable
+feature) is three numbers and cannot satisfy the variance and covariance terms over
+640 dimensions; the effective-rank diagnostic would show it. --independent_rotations
+runs the alternative as an ablation.
 
 Output: a metatrain checkpoint of the FlashMD model (encoder pretrained, prediction
 heads untouched) that `mtt train` can start from through `finetune: {read_from: ...}`,
@@ -54,7 +56,6 @@ from omegaconf import OmegaConf
 from metatrain.experimental.flashmd import __model__ as FlashMD
 from metatrain.utils.architectures import get_default_hypers
 from metatrain.utils.data import DatasetInfo
-from metatrain.utils.data.target_info import get_generic_target_info
 from metatrain.utils.neighbor_lists import get_system_with_neighbor_lists
 from metatrain.utils.omegaconf import expand_dataset_config
 
@@ -69,9 +70,13 @@ def load_config(path):
     masses = {int(k): float(v) for k, v in arch["training"]["masses"].items()}
     timestep = float(arch["training"]["timestep"])
     train_opts = expand_dataset_config(OmegaConf.create(cfg["training_set"]))[0]
-    targets = {name: get_generic_target_info(name, t) for name, t in train_opts["targets"].items()}
+    # The pretraining model is built with NO targets. If it carried the position and
+    # momentum targets, its checkpoint would also carry an unfitted target scaler (all
+    # ones), and metatrain's fine-tuning would keep it instead of fitting it to the data
+    # as the baseline does: the two arms would then minimise different losses. With no
+    # targets, fine-tuning adds the heads and fits the scaler exactly as from scratch.
     dataset_info = DatasetInfo(length_unit=str(train_opts["systems"]["length_unit"]),
-                               atomic_types=sorted(arch["atomic_types"]), targets=targets)
+                               atomic_types=sorted(arch["atomic_types"]), targets={})
     return cfg, model_hypers, masses, timestep, dataset_info
 
 
@@ -123,9 +128,10 @@ def make_system(types, q, p, cell, pbc, dtype, device):
     return system
 
 
-def make_batch(frames, model, dtype, device, augment, shared_rotation=False):
-    """Two lists of Systems (now, future). With augment, each frame gets a random O(3)
-    operation: independent for the two frames of a pair unless shared_rotation."""
+def make_batch(frames, model, dtype, device, augment, shared_rotation=True):
+    """Two lists of Systems (now, future). With augment, each pair gets a random O(3)
+    operation applied to both frames; with shared_rotation=False the two frames get
+    independent operations."""
     now = [make_system(t, q, p, c, b, dtype, device) for t, q, p, _, _, c, b in frames]
     fut = [make_system(t, qf, pf, c, b, dtype, device) for t, _, _, qf, pf, c, b in frames]
     if augment:
@@ -226,7 +232,8 @@ def main():
     ap.add_argument("--pred_hidden", type=int, default=1024)
     ap.add_argument("--max_frames", type=int, default=0, help="use only the first N frames of each file (smoke tests)")
     ap.add_argument("--no_augment", action="store_true")
-    ap.add_argument("--shared_rotation", action="store_true", help="same rotation for both frames of a pair (shortcut; for comparison only)")
+    ap.add_argument("--independent_rotations", action="store_true",
+                    help="ablation: independent random rotations for the two frames of a pair (default: shared)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--wandb", default="", help="wandb project name; empty disables")
     args = ap.parse_args()
@@ -273,12 +280,16 @@ def main():
         st = torch.load(state_path, map_location="cpu", weights_only=False)
         model.load_state_dict(st["model"]); pred.load_state_dict(st["pred"]); opt.load_state_dict(st["opt"])
         start_epoch, step, history = st["epoch"] + 1, st["step"], st["history"]
+        if st.get("epochs_planned", args.epochs) != args.epochs:
+            print(f"WARNING: resuming with --epochs {args.epochs} but the run was planned for "
+                  f"{st['epochs_planned']}; the learning-rate schedule will not match", flush=True)
         print(f"resumed from epoch {st['epoch']}", flush=True)
 
     run = None
     if args.wandb:
         import wandb
-        run = wandb.init(project=args.wandb, name=os.path.basename(args.out.rstrip("/")), config=vars(args), resume="allow")
+        run_name = os.path.basename(args.out.rstrip("/"))
+        run = wandb.init(project=args.wandb, name=run_name, id=run_name, config=vars(args), resume="allow")
 
     rng = np.random.default_rng(args.seed + start_epoch)
     for epoch in range(start_epoch, args.epochs):
@@ -289,7 +300,7 @@ def main():
         for b in range(steps_per_epoch):
             idx = order[b * args.batch_size:(b + 1) * args.batch_size]
             now, fut = make_batch([train.frames[i] for i in idx], model, dtype, device,
-                                  augment=not args.no_augment, shared_rotation=args.shared_rotation)
+                                  augment=not args.no_augment, shared_rotation=not args.independent_rotations)
             for g in opt.param_groups:
                 g["lr"] = lr_at(step)
             z_now = encode(model, now)
@@ -331,7 +342,7 @@ def main():
             run.log(rec, step=epoch)
 
         torch.save({"model": model.state_dict(), "pred": pred.state_dict(), "opt": opt.state_dict(),
-                    "epoch": epoch, "step": step, "history": history}, state_path)
+                    "epoch": epoch, "step": step, "history": history, "epochs_planned": args.epochs}, state_path)
         ckpt = model.get_checkpoint()
         ckpt["epoch"] = epoch
         ckpt["best_epoch"] = epoch

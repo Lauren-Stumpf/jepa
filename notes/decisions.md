@@ -273,3 +273,27 @@ the errors by element; hydrogen's 8 fs is most of a stretch period, so neither
 trivial predictor is good for it. A bug was fixed: with mass-scaled data files
 the reference was not unscaled before comparison, so earlier smoke numbers were
 not meaningful (no trained model was affected).
+
+## 2026-11-09 (later): code review of the pretraining; rotation decision reversed
+
+Independent code review against the metatrain and metatomic sources found that
+a pretraining model built with the position and momentum targets would carry an
+unfitted target scaler (all ones) in its checkpoint, and metatrain's fine-tuning
+would keep it rather than fit it, while the baseline fits the scaler to the
+data: the two arms would minimise different losses. Fixed by building the
+pretraining model with no targets; fine-tuning then adds the heads and fits the
+scaler exactly as from scratch (tested: the restarted model reports new
+targets and the scaler lists them as new outputs, encoder weights preserved).
+
+The same review disagreed with the design review on rotations, with the
+stronger argument: the FlashMD heads are linear maps from the features to
+Cartesian vectors, so the features must keep orientation; independent
+rotations for the two frames would train the encoder to discard it and
+fine-tuning would have to undo that. The orientation shortcut is three numbers
+and cannot satisfy the regulariser over 640 dimensions. Decision: shared
+rotation is the default (as in FlashMD training); the independent-rotation
+version runs as an ablation (jepa_pretrain_indep_organic8, with its own three
+10% fine-tune seeds) so the question is settled by measurement. Also from the
+review: the feature dimension is 640, not 768; the evaluation-mode crash with
+feature-only outputs is a metatrain bug worked around by encoding in training
+mode (PET has no dropout or batch normalisation).

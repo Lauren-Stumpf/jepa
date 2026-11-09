@@ -5,7 +5,7 @@ Tests for train/pretrain_jepa.py, on a tiny synthetic dataset (CPU is fine).
 
 Checks: config loading gives the model's cutoff and masses; the future state is
 recovered from the stored mass-scaled targets; the same O(3) operation is applied to
-both frames of a pair when asked, and independent ones by default; encoder is
+both frames of a pair by default, and independent ones for the ablation; encoder is
 deterministic and its features are not rotation invariant (as expected for PET); VICReg terms behave (collapsed batch gives a large variance loss,
 decorrelated unit-variance batch gives near zero); the loss falls over a few steps on
 a small batch; the saved checkpoint is loadable by metatrain in "finetune" context
@@ -53,7 +53,7 @@ def synthetic_file(path, n_frames, masses, seed=0):
 def test_config_and_data():
     cfg, hypers, masses, timestep, info = load_config(CONFIG)
     assert hypers["cutoff"] == 4.5 and masses[1] == 1.00794 and timestep == 8.0
-    assert set(info.targets) == {"position", "momentum"} and info.atomic_types == [1, 6, 7, 8]
+    assert info.targets == {} and info.atomic_types == [1, 6, 7, 8]   # no targets: heads and scaler are added at fine-tune
     with tempfile.TemporaryDirectory() as d:
         frames = synthetic_file(os.path.join(d, "t.xyz"), 4, masses)
         data = PairData(os.path.join(d, "t.xyz"), masses)
@@ -73,7 +73,7 @@ def test_augmentation_and_invariance(hypers, masses, timestep, info):
     torch.manual_seed(1)
     now0, fut0 = make_batch(data.frames[:3], model, torch.float32, "cpu", augment=False)
     torch.manual_seed(1)
-    now1, fut1 = make_batch(data.frames[:3], model, torch.float32, "cpu", augment=True, shared_rotation=True)
+    now1, fut1 = make_batch(data.frames[:3], model, torch.float32, "cpu", augment=True)   # shared (default)
     for a0, a1, b0, b1 in zip(now0, now1, fut0, fut1):
         # shared: the same orthogonal matrix R takes a0 -> a1 and b0 -> b1 (positions and momenta)
         R = torch.linalg.lstsq(a0.positions, a1.positions).solution.T   # a1 = a0 @ R.T
@@ -83,7 +83,7 @@ def test_augmentation_and_invariance(hypers, masses, timestep, info):
         p1 = a1.get_data("momentum").block().values.squeeze(-1)
         assert torch.allclose(p0 @ R.T, p1, atol=1e-4), "momenta not rotated with positions"
     torch.manual_seed(2)
-    now2, fut2 = make_batch(data.frames[:3], model, torch.float32, "cpu", augment=True)   # independent (default)
+    now2, fut2 = make_batch(data.frames[:3], model, torch.float32, "cpu", augment=True, shared_rotation=False)   # ablation
     for a0, a2, b0, b2 in zip(now0, now2, fut0, fut2):
         Ra = torch.linalg.lstsq(a0.positions, a2.positions).solution.T
         Rb = torch.linalg.lstsq(b0.positions, b2.positions).solution.T
@@ -150,6 +150,21 @@ def test_end_to_end_and_checkpoint(masses):
         key = next(k for k in st2["model"] if k.startswith("gnn_layers.0") and st2["model"][k].ndim == 2)
         assert torch.allclose(loaded.state_dict()[key], st2["model"][key])
         assert float(loaded.timestep) == 8.0 and abs(float(loaded.masses[1]) - masses[1]) < 1e-5
+        # fine-tuning must ADD the targets and FIT the scaler: with the full dataset info the
+        # restarted model must report new targets and the scaler must list them as new outputs
+        from omegaconf import OmegaConf
+        from metatrain.utils.data import DatasetInfo
+        from metatrain.utils.data.target_info import get_generic_target_info
+        from metatrain.utils.omegaconf import expand_dataset_config
+        import yaml
+        cfg = yaml.safe_load(open(CONFIG))
+        topts = expand_dataset_config(OmegaConf.create(cfg["training_set"]))[0]
+        full = DatasetInfo(length_unit="A", atomic_types=[1, 6, 7, 8],
+                           targets={n: get_generic_target_info(n, t) for n, t in topts["targets"].items()})
+        restarted = loaded.restart(full)
+        assert restarted.has_new_targets, "fine-tune would not add the heads"
+        assert sorted(restarted.scaler.new_outputs) == ["momentum", "position"], "scaler would not be fitted at fine-tune"
+        assert torch.allclose(restarted.state_dict()[key], st2["model"][key]), "encoder weights lost in restart"
 
 
 if __name__ == "__main__":
