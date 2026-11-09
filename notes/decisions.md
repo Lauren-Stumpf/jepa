@@ -211,3 +211,13 @@ New protocol:
    before the runs are made.
 4. checks/check_water_temperatures.py now also tests that the run-averaged
    temperature is flat in time, which is the test that detects this problem.
+
+## 2026-11-09: first comparison at 100 epochs
+
+The organic baseline takes about 8 minutes per epoch on an A40, so the planned
+300 epochs is about 40 hours. For a first comparison by 11 November the
+baseline and the JEPA-pretrained model are both fine-tuned for 100 epochs with
+the full warmup-plus-cosine schedule compressed into that length, so each is a
+completed training run rather than an interrupted one. Both arms see the same
+data for the same number of epochs; the pretrained arm has had extra compute in
+pretraining, which is stated with the result. Longer runs follow later.
