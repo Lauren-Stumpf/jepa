@@ -151,6 +151,9 @@ def main():
                     help="the model was trained with predict_momenta_as_difference: true (water 1 fs set)")
     ap.add_argument("--config", default=None,
                     help="metatrain yaml the model was trained with; its masses are used to undo the scaling")
+    ap.add_argument("--second_order", action="store_true",
+                    help="also report the second-order trivial predictor q + p/m dt + F/(2m) dt^2 with PET-MAD forces "
+                         "at the current frame (one force call per frame)")
     ap.add_argument("--max_T", type=float, default=5000.0,
                     help="skip frames whose stored kinetic temperature exceeds this (K)")
     ap.add_argument("--max_disp", type=float, default=5.0,
@@ -163,9 +166,11 @@ def main():
         import yaml
         with open(args.config) as f:
             masses = {int(k): float(v) for k, v in yaml.safe_load(f)["architecture"]["training"]["masses"].items()}
-    if args.model == "verlet":
+    calc = None
+    if args.model == "verlet" or args.second_order:
         from pet_mad.calculator import PETMADCalculator
         calc = PETMADCalculator(version=args.pet_mad_version, device=device)
+    if args.model == "verlet":
         model = None
     else:
         model = load_flashmd(args.model, args.stride_fs, device)
@@ -177,6 +182,7 @@ def main():
     sq_dq_ms = sq_dp_ms = sq_dq = sq_dp = 0.0
     sq_ref_dq_ms = sq_ref_p_ms = 0.0
     sq_ball_dq_ms = sq_still_dp_ms = 0.0
+    sq_so_dq_ms = sq_so_dp_ms = 0.0
     by_element = {}
     n_entries = 0
     for i, atoms in enumerate(ase.io.iread(args.xyz, index=":", format="extxyz")):
@@ -211,8 +217,17 @@ def main():
         dp_ms = dp / np.sqrt(m)
         ref_p_ms = ref_p / np.sqrt(m)
         # trivial predictors: "no motion" (q, p unchanged) and "ballistic" (q + p/m dt, p unchanged)
-        ball_q = q0 + p0 / m * (args.stride_fs * ase.units.fs)
+        dt = args.stride_fs * ase.units.fs
+        ball_q = q0 + p0 / m * dt
         ball_dq_ms = (ball_q - ref_q) * np.sqrt(m)
+        if args.second_order:
+            a2 = atoms.copy(); a2.calc = calc
+            F = a2.get_forces()
+            so_q = ball_q + 0.5 * F / m * dt ** 2
+            so_dq_ms = (so_q - ref_q) * np.sqrt(m)
+            sq_so_dq_ms += (so_dq_ms ** 2).sum()
+            so_p = p0 + F * dt                      # momentum from one force evaluation
+            sq_so_dp_ms += (((so_p - ref_p) / np.sqrt(m)) ** 2).sum()
         still_dp_ms = (p0 - ref_p) / np.sqrt(m)
         k = dq.size
         sq_dq_ms += (dq_ms ** 2).sum(); sq_dp_ms += (dp_ms ** 2).sum()
@@ -259,6 +274,9 @@ def main():
           f"[no motion {np.sqrt(sq_ref_dq_ms/n_entries):.4f}, ballistic q + p/m dt {np.sqrt(sq_ball_dq_ms/n_entries):.4f}]")
     print(f"  mass-scaled momentum RMSE:     {np.sqrt(sq_dp_ms/n_entries):.4f}   "
           f"[momentum unchanged {np.sqrt(sq_still_dp_ms/n_entries):.4f}, reference momentum RMS {np.sqrt(sq_ref_p_ms/n_entries):.4f}]")
+    if args.second_order:
+        print(f"  second-order trivial predictor (one PET-MAD force call): dq {np.sqrt(sq_so_dq_ms/n_entries):.4f}, "
+              f"dp {np.sqrt(sq_so_dp_ms/n_entries):.4f}")
     print("  by element (mass-scaled RMSE: model dq | ballistic dq | no-motion dq | model dp):")
     for z in sorted(by_element):
         e = by_element[z]

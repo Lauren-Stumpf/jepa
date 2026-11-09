@@ -297,3 +297,22 @@ version runs as an ablation (jepa_pretrain_indep_organic8, with its own three
 review: the feature dimension is 640, not 768; the evaluation-mode crash with
 feature-only outputs is a metatrain bug worked around by encoding in training
 mode (PET has no dropout or batch normalisation).
+
+## 2026-11-09 (later): how the results will be read
+
+Three layers. (1) Fine-tuned one-step error on the 21 held-out molecules,
+baseline versus pretrained, three seeds at 10% data plus one pair at full data,
+against a ladder of trivial predictors: no motion; straight line at the current
+velocity (ballistic); straight line plus the bend from one force evaluation
+(second order, PET-MAD forces at the current frame); and the exact 32-step
+integration, which is the reference itself. A useful model sits between second
+order and exact. Errors also split by element. (2) During pretraining, the
+ratio of the predictor's error to the "future embedding = current embedding"
+error. (3) Linear probes on the frozen features (eval/probe_features.py),
+pretrained versus untrained encoder: dynamic targets (displacement and future
+momentum magnitudes), static targets (element, bonded-neighbour count), and the
+static fraction of the feature vector (variance explained by the static
+descriptors alone). Lauren's request: measure how static the embedding is
+before trying to fix it; a static/dynamic split of the vector, with the
+predictor acting on the change (residual) of the dynamic part, is the candidate
+next arm if the measurement shows the problem.
