@@ -167,6 +167,21 @@ def encode(model, systems):
         model.train(was_training)
 
 
+class Projector(torch.nn.Module):
+    """Optional small network between the encoder and the loss (VICReg's "expander").
+    With it, the variance and covariance terms act on the projector's output rather
+    than on the encoder's own features, so the regulariser cannot reshape the encoder
+    directly; the encoder is only shaped through what the projector needs."""
+
+    def __init__(self, d, out):
+        super().__init__()
+        self.net = torch.nn.Sequential(
+            torch.nn.LayerNorm(d), torch.nn.Linear(d, out), torch.nn.GELU(), torch.nn.Linear(out, out))
+
+    def forward(self, z):
+        return self.net(z)
+
+
 class Predictor(torch.nn.Module):
     def __init__(self, d, hidden):
         super().__init__()
@@ -230,6 +245,9 @@ def main():
     ap.add_argument("--w_var", type=float, default=25.0)
     ap.add_argument("--w_cov", type=float, default=1.0)
     ap.add_argument("--pred_hidden", type=int, default=1024)
+    ap.add_argument("--projector_dim", type=int, default=0,
+                    help="0: regulariser and prediction act on the encoder features directly; "
+                         ">0: on the output of a projector network of this width (VICReg expander)")
     ap.add_argument("--max_frames", type=int, default=0, help="use only the first N frames of each file (smoke tests)")
     ap.add_argument("--no_augment", action="store_true")
     ap.add_argument("--independent_rotations", action="store_true",
@@ -257,11 +275,17 @@ def main():
     with torch.no_grad():
         now, _ = make_batch(train.frames[:2], model, dtype, device, augment=False)
         d = encode(model, now).shape[1]
-    pred = Predictor(d, args.pred_hidden).to(device=device, dtype=dtype)
+    if args.projector_dim > 0:
+        proj = Projector(d, args.projector_dim).to(device=device, dtype=dtype)
+        d_loss = args.projector_dim
+    else:
+        proj = torch.nn.Identity()
+        d_loss = d
+    pred = Predictor(d_loss, args.pred_hidden).to(device=device, dtype=dtype)
     print(f"feature dimension {d}; encoder {sum(p.numel() for p in model.parameters()) / 1e6:.1f}M, "
           f"predictor {sum(p.numel() for p in pred.parameters()) / 1e6:.1f}M parameters", flush=True)
 
-    params = list(model.parameters()) + list(pred.parameters())
+    params = list(model.parameters()) + list(pred.parameters()) + list(proj.parameters())
     opt = torch.optim.AdamW(params, lr=args.lr, weight_decay=0.0)
     steps_per_epoch = math.ceil(len(train) / args.batch_size)
     total_steps = steps_per_epoch * args.epochs
@@ -279,6 +303,8 @@ def main():
     if os.path.exists(state_path):
         st = torch.load(state_path, map_location="cpu", weights_only=False)
         model.load_state_dict(st["model"]); pred.load_state_dict(st["pred"]); opt.load_state_dict(st["opt"])
+        if "proj" in st:
+            proj.load_state_dict(st["proj"])
         start_epoch, step, history = st["epoch"] + 1, st["step"], st["history"]
         if st.get("epochs_planned", args.epochs) != args.epochs:
             print(f"WARNING: resuming with --epochs {args.epochs} but the run was planned for "
@@ -293,7 +319,7 @@ def main():
 
     rng = np.random.default_rng(args.seed + start_epoch)
     for epoch in range(start_epoch, args.epochs):
-        model.train(); pred.train()
+        model.train(); pred.train(); proj.train()
         order = rng.permutation(len(train))
         agg = {}
         t_ep = time.time()
@@ -305,7 +331,10 @@ def main():
                 g["lr"] = lr_at(step)
             z_now = encode(model, now)
             z_fut = encode(model, fut)
-            loss, parts = jepa_loss(z_now, z_fut, pred, args.w_inv, args.w_var, args.w_cov)
+            loss, parts = jepa_loss(proj(z_now), proj(z_fut), pred, args.w_inv, args.w_var, args.w_cov)
+            if args.projector_dim > 0 and b % 200 == 0:   # the encoder's own features, as well as the loss space
+                _, _, de = vicreg_terms(z_now.detach())
+                parts.update({"enc_rank": de["eff_rank"], "enc_dead": de["dead_frac"]})
             opt.zero_grad(set_to_none=True)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(params, 1.0)
@@ -313,20 +342,24 @@ def main():
             step += 1
             parts["loss"] = loss.item()
             for k, v in parts.items():
-                agg[k] = agg.get(k, 0.0) + v
+                if not k.startswith("enc_"):
+                    agg[k] = agg.get(k, 0.0) + v
             if b % 200 == 0:
                 print(f"  epoch {epoch} step {b}/{steps_per_epoch} loss {loss.item():.4f} inv/trivial {parts['inv_ratio']:.3f} "
                       f"var {parts['var']:.4f} cov {parts['cov']:.4f} std_min {parts['std_min']:.3f} "
                       f"dead {parts['dead_frac']:.2f} rank {parts['eff_rank']:.0f}", flush=True)
         train_log = {f"train_{k}": v / steps_per_epoch for k, v in agg.items()}
 
-        model.eval(); pred.eval()
+        model.eval(); pred.eval(); proj.eval()
         vagg = {}
         nv = 0
         with torch.no_grad():
             for b in range(0, len(val), args.batch_size):
                 now, fut = make_batch(val.frames[b:b + args.batch_size], model, dtype, device, augment=False)
-                loss, parts = jepa_loss(encode(model, now), encode(model, fut), pred, args.w_inv, args.w_var, args.w_cov)
+                h_now = encode(model, now)
+                loss, parts = jepa_loss(proj(h_now), proj(encode(model, fut)), pred, args.w_inv, args.w_var, args.w_cov)
+                _, _, de = vicreg_terms(h_now)
+                parts.update({"enc_rank": de["eff_rank"], "enc_dead": de["dead_frac"]})
                 parts["loss"] = loss.item()
                 for k, v in parts.items():
                     vagg[k] = vagg.get(k, 0.0) + v
@@ -337,11 +370,12 @@ def main():
         print(f"epoch {epoch}: train loss {rec['train_loss']:.4f} | val loss {rec['val_loss']:.4f} "
               f"inv/trivial {rec['val_inv_ratio']:.3f} var {rec['val_var']:.4f} cov {rec['val_cov']:.4f} "
               f"std_min {rec['val_std_min']:.3f} dead {rec['val_dead_frac']:.2f} rank {rec['val_eff_rank']:.0f} "
+              f"| encoder features: dead {rec['val_enc_dead']:.2f} rank {rec['val_enc_rank']:.0f} "
               f"| {rec['seconds']:.0f} s", flush=True)
         if run is not None:
             run.log(rec, step=epoch)
 
-        torch.save({"model": model.state_dict(), "pred": pred.state_dict(), "opt": opt.state_dict(),
+        torch.save({"model": model.state_dict(), "pred": pred.state_dict(), "proj": proj.state_dict(), "opt": opt.state_dict(),
                     "epoch": epoch, "step": step, "history": history, "epochs_planned": args.epochs}, state_path)
         ckpt = model.get_checkpoint()
         ckpt["epoch"] = epoch

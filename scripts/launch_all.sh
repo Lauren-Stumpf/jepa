@@ -15,6 +15,7 @@ flashmd_water4_scratch configs/flashmd_water4_scratch.yaml
 flashmd_water1_scratch configs/flashmd_water1_scratch.yaml
 jepa_pretrain_organic8 PRETRAIN
 jepa_pretrain_indep_organic8 PRETRAIN:--independent_rotations
+jepa_pretrain_proj_organic8 PRETRAIN:--projector_dim 2048
 jepa_finetune_organic8 configs/jepa_finetune_organic8.yaml
 flashmd_organic8_scratch_10pct_s0 configs/flashmd_organic8_scratch_10pct_s0.yaml
 flashmd_organic8_scratch_10pct_s1 configs/flashmd_organic8_scratch_10pct_s1.yaml
@@ -24,7 +25,10 @@ jepa_finetune_organic8_10pct_s1 configs/jepa_finetune_organic8_10pct_s1.yaml
 jepa_finetune_organic8_10pct_s2 configs/jepa_finetune_organic8_10pct_s2.yaml
 jepa_finetune_indep_organic8_10pct_s0 configs/jepa_finetune_indep_organic8_10pct_s0.yaml
 jepa_finetune_indep_organic8_10pct_s1 configs/jepa_finetune_indep_organic8_10pct_s1.yaml
-jepa_finetune_indep_organic8_10pct_s2 configs/jepa_finetune_indep_organic8_10pct_s2.yaml"
+jepa_finetune_indep_organic8_10pct_s2 configs/jepa_finetune_indep_organic8_10pct_s2.yaml
+jepa_finetune_proj_organic8_10pct_s0 configs/jepa_finetune_proj_organic8_10pct_s0.yaml
+jepa_finetune_proj_organic8_10pct_s1 configs/jepa_finetune_proj_organic8_10pct_s1.yaml
+jepa_finetune_proj_organic8_10pct_s2 configs/jepa_finetune_proj_organic8_10pct_s2.yaml"
 FREE_MB=${FREE_MB:-500}       # a GPU nobody uses: less than this much memory in use
 RUNS_PER_GPU=${RUNS_PER_GPU:-3}   # our runs use ~4 GB each on 46 GB cards, so several can share one
 # GPUs already used by our own running supervisors (each writes its index to results/runs/<name>/gpu)

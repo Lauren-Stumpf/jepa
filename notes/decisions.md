@@ -316,3 +316,18 @@ descriptors alone). Lauren's request: measure how static the embedding is
 before trying to fix it; a static/dynamic split of the vector, with the
 predictor acting on the change (residual) of the dynamic part, is the candidate
 next arm if the measurement shows the problem.
+
+## 2026-11-09 (afternoon): projector arm
+
+The 300-frame smoke run of the pretraining showed the untrained encoder's
+features have effective rank about 7 of 640 with 71% of dimensions nearly
+constant, and the covariance penalty is the largest term of the loss. In
+standard VICReg the variance and covariance terms act on the output of a
+projector network ("expander") on top of the encoder, not on the encoder's
+features; ours act on the encoder directly, which could push the encoder in
+directions that do not help the heads. Rather than guess, a third pretraining
+runs alongside (jepa_pretrain_proj_organic8: projector 640 -> 2048 -> 2048,
+prediction and regulariser in the projector's output space; the encoder's own
+rank and dead fraction are logged separately), with its own three 10% fine-tune
+seeds. Check after the first epoch of each: encoder rank rising into the
+hundreds and dead fraction falling, and inv/trivial below 1.
