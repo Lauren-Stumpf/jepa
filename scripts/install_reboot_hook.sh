@@ -4,5 +4,7 @@
 # Remove later with:  crontab -l | grep -v launch_all.sh | crontab -
 set -euo pipefail
 LINE='@reboot sleep 120 && bash /storage3/lauren/code/jepa/scripts/launch_all.sh >> /storage3/lauren/code/jepa/results/launch_all.log 2>&1'
-( crontab -l 2>/dev/null | grep -v launch_all.sh; echo "$LINE" ) | crontab -
+# with no existing crontab, "crontab -l" fails and grep finds nothing; neither is an error here
+existing=$(crontab -l 2>/dev/null | grep -v launch_all.sh || true)
+printf '%s\n%s\n' "$existing" "$LINE" | sed '/^$/d' | crontab -
 echo "installed:"; crontab -l | grep launch_all.sh
