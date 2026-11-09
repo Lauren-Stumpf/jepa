@@ -7,7 +7,7 @@
 # Requires i-pi and i-pi-driver (Fortran, built from i-PI's drivers/f90) on PATH.
 set -euo pipefail
 # if this script dies for any reason, take its i-PI and driver with it (no orphans holding files open)
-trap 'kill $(jobs -p) 2>/dev/null' EXIT
+trap 'kill $(jobs -p) 2>/dev/null || true' EXIT
 # one core per run: numpy inside i-PI otherwise starts a thread per core, and 20 parallel
 # runs on a 64-core node would start 1280 threads
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1

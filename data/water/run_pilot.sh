@@ -6,7 +6,7 @@
 #   bash data/water/run_pilot.sh /storage3/lauren/data/water_pilot
 set -euo pipefail
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
-trap 'kill $(jobs -p) 2>/dev/null' EXIT
+trap 'kill $(jobs -p) 2>/dev/null || true' EXIT
 OUT=${1:?output directory}
 STEPS=${STEPS:-200000}   # 200000 x 0.5 fs = 100 ps
 HERE=$(cd "$(dirname "$0")" && pwd)
