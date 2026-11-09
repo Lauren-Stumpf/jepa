@@ -12,13 +12,21 @@ RUNS="flashmd_organic8_scratch configs/flashmd_organic8_scratch.yaml
 flashmd_water16_scratch configs/flashmd_water16_scratch.yaml
 flashmd_water4_scratch configs/flashmd_water4_scratch.yaml
 flashmd_water1_scratch configs/flashmd_water1_scratch.yaml"
-FREE_MB=${FREE_MB:-1000}   # a GPU counts as free if less than this much memory is in use
+FREE_MB=${FREE_MB:-500}    # a GPU counts as free if less than this much memory is in use
+# GPUs already used by our own running supervisors (each writes its index to results/runs/<name>/gpu)
 taken=""
+for f in results/runs/*/gpu; do
+  [ -f "$f" ] || continue
+  n=$(basename "$(dirname "$f")")
+  tmux has-session -t "train_$n" 2>/dev/null && taken="$taken $(cat "$f")"
+done
 echo "$(date '+%F %T') launch_all"
 while read -r name cfg; do
   [ -z "$name" ] && continue
   if [ -f "results/runs/$name/model.pt" ]; then echo "  $name: finished"; continue; fi
   if tmux has-session -t "train_$name" 2>/dev/null; then echo "  $name: already running"; continue; fi
+  train_file=$(grep -m1 "read_from:" "$cfg" | awk '{print $2}')
+  if [ ! -s "$train_file" ]; then echo "  $name: no training data yet ($train_file), skipped"; continue; fi
   gpu=""
   for attempt in $(seq 1 144); do   # wait up to 24 h for a free GPU
     gpu=$(nvidia-smi --query-gpu=index,memory.used --format=csv,noheader,nounits |

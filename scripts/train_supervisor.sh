@@ -14,6 +14,7 @@ ln -sfn "$REPO/data" data            # configs read data/... relative to the wor
 cp "$REPO/$CFG" options.yaml
 source "$REPO/env_train.sh"
 export CUDA_VISIBLE_DEVICES=$GPU
+echo "$GPU" > gpu
 fails=0
 while [ ! -f model.pt ]; do
   ckpt=$(ls -t outputs/*/*/*.ckpt 2>/dev/null | head -1)
