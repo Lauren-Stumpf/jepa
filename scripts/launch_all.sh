@@ -9,6 +9,7 @@ REPO=/storage3/lauren/code/jepa
 cd "$REPO"
 # name  config
 RUNS="flashmd_organic8_scratch configs/flashmd_organic8_scratch.yaml
+flashmd_organic8_scratch_300 configs/flashmd_organic8_scratch_300.yaml
 flashmd_water16_scratch configs/flashmd_water16_scratch.yaml
 flashmd_water4_scratch configs/flashmd_water4_scratch.yaml
 flashmd_water1_scratch configs/flashmd_water1_scratch.yaml"
