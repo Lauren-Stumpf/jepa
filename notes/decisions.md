@@ -371,3 +371,11 @@ times the prediction pull while inv/trivial does not improve, the weights come
 down. The 25/25/1 weights are the image defaults and will be reset from these
 measurements. The covariance term's division by 640 is the standard definition;
 the balance is set through the weights, not by changing the definition.
+
+## 2026-11-09: first pretraining cancelled
+
+jepa_pretrain_organic8 (predictor normalises its input but not its target) is
+stopped: its result would mainly reflect that flaw, and it shared GPU 1 with the
+100-epoch baseline. Its fine-tune configs are removed. The full-data JEPA
+fine-tune now starts from jepa_pretrain_normtarget_organic8 (normalise both
+sides, the standard design).
