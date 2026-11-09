@@ -13,6 +13,7 @@ flashmd_organic8_scratch_300 configs/flashmd_organic8_scratch_300.yaml
 flashmd_water16_scratch configs/flashmd_water16_scratch.yaml
 flashmd_water4_scratch configs/flashmd_water4_scratch.yaml
 flashmd_water1_scratch configs/flashmd_water1_scratch.yaml
+jepa_pretrain_organic8 PRETRAIN
 jepa_finetune_organic8 configs/jepa_finetune_organic8.yaml
 flashmd_organic8_scratch_10pct_s0 configs/flashmd_organic8_scratch_10pct_s0.yaml
 flashmd_organic8_scratch_10pct_s1 configs/flashmd_organic8_scratch_10pct_s1.yaml
@@ -39,12 +40,19 @@ pick_gpu() {  # a GPU is eligible if it is empty, or if only our runs are on it 
 echo "$(date '+%F %T') launch_all"
 while read -r name cfg; do
   [ -z "$name" ] && continue
-  if [ -f "results/runs/$name/model.pt" ]; then echo "  $name: finished"; continue; fi
+  if [ "$cfg" = PRETRAIN ]; then
+    done_file="results/runs/$name/manifest.json"
+  else
+    done_file="results/runs/$name/model.pt"
+    train_file=$(grep -m1 "read_from:" "$cfg" | awk '{print $2}')
+    ckpt=$(grep -m1 "read_from: results" "$cfg" | awk '{print $2}')
+  fi
+  if [ -f "$done_file" ]; then echo "  $name: finished"; continue; fi
   if tmux has-session -t "train_$name" 2>/dev/null; then echo "  $name: already running"; continue; fi
-  train_file=$(grep -m1 "read_from:" "$cfg" | awk '{print $2}')
-  if [ ! -s "$train_file" ]; then echo "  $name: no training data yet ($train_file), skipped"; continue; fi
-  ckpt=$(grep -m1 "read_from: results" "$cfg" | awk '{print $2}')
-  if [ -n "$ckpt" ] && [ ! -s "$ckpt" ]; then echo "  $name: pretrained checkpoint not ready ($ckpt), skipped"; continue; fi
+  if [ "$cfg" != PRETRAIN ]; then
+    if [ ! -s "$train_file" ]; then echo "  $name: no training data yet ($train_file), skipped"; continue; fi
+    if [ -n "$ckpt" ] && [ ! -s "$ckpt" ]; then echo "  $name: pretrained checkpoint not ready ($ckpt), skipped"; continue; fi
+  fi
   gpu=""
   for attempt in $(seq 1 144); do   # wait up to 24 h for a GPU
     gpu=$(pick_gpu)
@@ -53,7 +61,11 @@ while read -r name cfg; do
   done
   [ -z "$gpu" ] && { echo "  $name: no GPU after 24 h, skipped"; continue; }
   ours="$ours $gpu"
-  tmux new-session -d -s "train_$name" "bash $REPO/scripts/train_supervisor.sh $name $cfg $gpu"
+  if [ "$cfg" = PRETRAIN ]; then
+    tmux new-session -d -s "train_$name" "bash $REPO/scripts/pretrain_supervisor.sh $name $gpu"
+  else
+    tmux new-session -d -s "train_$name" "bash $REPO/scripts/train_supervisor.sh $name $cfg $gpu"
+  fi
   echo "  $name: started on GPU $gpu (tmux session train_$name)"
   sleep 60   # let it allocate GPU memory before the next one looks for a free GPU
 done <<< "$RUNS"
