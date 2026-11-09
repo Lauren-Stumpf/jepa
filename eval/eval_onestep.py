@@ -176,17 +176,27 @@ def main():
     broken = []
     sq_dq_ms = sq_dp_ms = sq_dq = sq_dp = 0.0
     sq_ref_dq_ms = sq_ref_p_ms = 0.0
+    sq_ball_dq_ms = sq_still_dp_ms = 0.0
+    by_element = {}
     n_entries = 0
     for i, atoms in enumerate(ase.io.iread(args.xyz, index=":", format="extxyz")):
         if (i - args.offset) % args.every != 0 or i < args.offset:
             continue
         if len(rows) >= args.n:
             break
+        m = (atoms.get_masses() if masses is None else np.array([masses[int(z)] for z in atoms.numbers]))[:, None]
+        q0 = atoms.get_positions()
+        p0 = atoms.get_momenta()
         ref_q = atoms.arrays["future_positions"]
         ref_p = atoms.arrays["future_momenta"]
-        m = atoms.get_masses()[:, None]
+        if args.scaled_targets:
+            # the data file stores mass-scaled targets (data/prepare_organic.py, data/water/parse_runs.py):
+            # recover the raw future state before comparing
+            ref_q = q0 + (ref_q - q0) / np.sqrt(m)
+            ref_p = p0 + (ref_p - p0) * np.sqrt(m) if args.momenta_difference else ref_p * np.sqrt(m)
         kin_T = 2.0 * atoms.get_kinetic_energy() / (3.0 * len(atoms) * ase.units.kB)
-        ref_disp_rms = float(np.sqrt((((ref_q - atoms.get_positions()) * np.sqrt(m)) ** 2).mean()))
+        ref_disp_ms = (ref_q - q0) * np.sqrt(m)
+        ref_disp_rms = float(np.sqrt((ref_disp_ms ** 2).mean()))
         if kin_T > args.max_T or ref_disp_rms > args.max_disp:
             broken.append((i, atoms.get_chemical_formula(), float(kin_T), ref_disp_rms))
             continue
@@ -199,12 +209,22 @@ def main():
         dp = p - ref_p
         dq_ms = dq * np.sqrt(m)
         dp_ms = dp / np.sqrt(m)
-        ref_disp_ms = (ref_q - atoms.get_positions()) * np.sqrt(m)
         ref_p_ms = ref_p / np.sqrt(m)
+        # trivial predictors: "no motion" (q, p unchanged) and "ballistic" (q + p/m dt, p unchanged)
+        ball_q = q0 + p0 / m * (args.stride_fs * ase.units.fs)
+        ball_dq_ms = (ball_q - ref_q) * np.sqrt(m)
+        still_dp_ms = (p0 - ref_p) / np.sqrt(m)
         k = dq.size
         sq_dq_ms += (dq_ms ** 2).sum(); sq_dp_ms += (dp_ms ** 2).sum()
         sq_dq += (dq ** 2).sum(); sq_dp += (dp ** 2).sum()
         sq_ref_dq_ms += (ref_disp_ms ** 2).sum(); sq_ref_p_ms += (ref_p_ms ** 2).sum()
+        sq_ball_dq_ms += (ball_dq_ms ** 2).sum(); sq_still_dp_ms += (still_dp_ms ** 2).sum()
+        for z in np.unique(atoms.numbers):
+            sel = atoms.numbers == z
+            e = by_element.setdefault(int(z), {"n": 0, "dq": 0.0, "dp": 0.0, "ball": 0.0, "ref_dq": 0.0})
+            e["n"] += int(sel.sum()) * 3
+            e["dq"] += (dq_ms[sel] ** 2).sum(); e["dp"] += (dp_ms[sel] ** 2).sum()
+            e["ball"] += (ball_dq_ms[sel] ** 2).sum(); e["ref_dq"] += (ref_disp_ms[sel] ** 2).sum()
         n_entries += k
         rows.append({
             "frame": i, "natoms": len(atoms), "formula": atoms.get_chemical_formula(),
@@ -213,6 +233,9 @@ def main():
             "rmse_dp_massscaled": float(np.sqrt((dp_ms ** 2).mean())),
             "rmse_dq_A": float(np.sqrt((dq ** 2).mean())),
             "rmse_dp": float(np.sqrt((dp ** 2).mean())),
+            "ballistic_rmse_dq_massscaled": float(np.sqrt((ball_dq_ms ** 2).mean())),
+            "nomotion_rmse_dq_massscaled": float(np.sqrt((ref_disp_ms ** 2).mean())),
+            "nomotion_rmse_dp_massscaled": float(np.sqrt((still_dp_ms ** 2).mean())),
         })
         if len(rows) % 100 == 0:
             print(f"{len(rows)} frames, running mass-scaled RMSE: "
@@ -232,12 +255,17 @@ def main():
     for b in broken:
         print(f"  excluded frame {b[0]} {b[1]}: kinetic T {b[2]:.3g} K, stored displacement RMS {b[3]:.3g}")
     print(f"  per-frame median mass-scaled RMSE: dq {med_dq:.4f}, dp {med_dp:.4f}")
-    print(f"  mass-scaled displacement RMSE: {np.sqrt(sq_dq_ms/n_entries):.4f} "
-          f"(reference displacement RMS {np.sqrt(sq_ref_dq_ms/n_entries):.4f})")
-    print(f"  mass-scaled momentum RMSE:     {np.sqrt(sq_dp_ms/n_entries):.4f} "
-          f"(reference momentum RMS {np.sqrt(sq_ref_p_ms/n_entries):.4f})")
+    print(f"  mass-scaled displacement RMSE: {np.sqrt(sq_dq_ms/n_entries):.4f}   "
+          f"[no motion {np.sqrt(sq_ref_dq_ms/n_entries):.4f}, ballistic q + p/m dt {np.sqrt(sq_ball_dq_ms/n_entries):.4f}]")
+    print(f"  mass-scaled momentum RMSE:     {np.sqrt(sq_dp_ms/n_entries):.4f}   "
+          f"[momentum unchanged {np.sqrt(sq_still_dp_ms/n_entries):.4f}, reference momentum RMS {np.sqrt(sq_ref_p_ms/n_entries):.4f}]")
+    print("  by element (mass-scaled RMSE: model dq | ballistic dq | no-motion dq | model dp):")
+    for z in sorted(by_element):
+        e = by_element[z]
+        print(f"    Z={z:2d}: {np.sqrt(e['dq']/e['n']):.4f} | {np.sqrt(e['ball']/e['n']):.4f} | "
+              f"{np.sqrt(e['ref_dq']/e['n']):.4f} | {np.sqrt(e['dp']/e['n']):.4f}")
     print(f"  plain position RMSE: {np.sqrt(sq_dq/n_entries):.5f} A, plain momentum RMSE: {np.sqrt(sq_dp/n_entries):.5f}")
-    print("compare the mass-scaled values with Fig. 8 of the FlashMD paper for the universal 8 fs model")
+    print("a model is useful only if its dq error is below the ballistic value and its dp error below the unchanged-momentum value")
     print("written", args.out)
 
 

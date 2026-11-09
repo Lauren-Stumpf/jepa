@@ -221,3 +221,55 @@ the full warmup-plus-cosine schedule compressed into that length, so each is a
 completed training run rather than an interrupted one. Both arms see the same
 data for the same number of epochs; the pretrained arm has had extra compute in
 pretraining, which is stated with the result. Longer runs follow later.
+
+## 2026-11-09: JEPA pretraining design (first version) and the comparison plan
+
+Pretraining (train/pretrain_jepa.py): the FlashMD network's per-atom "feature"
+output (768 numbers per atom) is the embedding. The same encoder is applied to
+the current frame (positions and momenta) and to the frame one stride later; a
+3-layer MLP predictor maps the current embedding to the future one. Loss:
+25 x mean squared prediction error + 25 x VICReg variance hinge (each dimension's
+spread over the atoms of a batch pushed towards 1) on both embeddings + 1 x
+VICReg covariance penalty on both. No momentum (EMA) encoder and no
+stop-gradient: the regulariser alone prevents collapse, which is the
+"world-model" design decided on 2 November (Bruno's SIGReg variant is the next
+arm). Batch 64 (the regulariser is estimated over the atoms of a batch), AdamW
+3e-4 with the baseline's warmup-plus-cosine schedule, 20 epochs on the same
+84,000 training pairs as the baseline.
+
+Independent review of the design led to three changes before the first run:
+1. The two frames of a pair get independent random rotations, not the same one.
+   A molecule barely turns in 8 fs, so with a shared rotation absolute
+   orientation would be a high-variance, perfectly predictable feature and the
+   predictor could satisfy the loss from it alone (PET features are only
+   approximately rotation invariant). --shared_rotation keeps the old behaviour
+   for a later ablation.
+2. The headline pretraining diagnostic is the ratio of the predictor's error to
+   the error of "future embedding = current embedding"; a ratio near 1 means
+   nothing about motion was learned (element, bonding and molecule identity are
+   already perfectly predictable over 8 fs and satisfy the variance terms).
+   eval/probe_features.py adds a linear probe from frozen features to the
+   mass-scaled displacement and future-momentum magnitudes, pretrained encoder
+   versus untrained encoder; if the pretrained probe is not better, the result is
+   presented as a different initialisation rather than dynamics pretraining.
+   Logged per epoch: minimum per-dimension spread, fraction of dimensions with
+   spread below 0.5, effective rank of the embedding covariance.
+3. Main comparison at 10% of the training frames (every 10th frame of train.xyz,
+   so every molecule is represented), three seeds per arm, 100 epochs each;
+   pretraining effects show first at low data and three seeds give a spread.
+   The two full-data runs (one seed each) are a secondary result with the
+   compute mismatch stated: pretraining adds roughly 40 to 50 epochs of encoder
+   compute to the pretrained arm.
+
+Fine-tuning (configs/jepa_finetune_organic8*.yaml) is the baseline config with
+`finetune: {read_from: <pretrained checkpoint>, method: full}`: same data, same
+schedule, every weight trainable, heads randomly initialised; metatrain fits the
+composition model and scaler at the start of fine-tuning as it does for the
+baseline.
+
+Evaluation (eval/eval_onestep.py) now reports, alongside the model, the two
+trivial predictors "no motion" and "ballistic" (q + p/m dt, p unchanged) and
+the errors by element; hydrogen's 8 fs is most of a stretch period, so neither
+trivial predictor is good for it. A bug was fixed: with mass-scaled data files
+the reference was not unscaled before comparison, so earlier smoke numbers were
+not meaningful (no trained model was affected).
