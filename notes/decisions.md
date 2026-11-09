@@ -379,3 +379,28 @@ stopped: its result would mainly reflect that flaw, and it shared GPU 1 with the
 100-epoch baseline. Its fine-tune configs are removed. The full-data JEPA
 fine-tune now starts from jepa_pretrain_normtarget_organic8 (normalise both
 sides, the standard design).
+
+## 2026-11-09 (evening): measured pull of the loss terms; relative prediction loss
+
+First-epoch measurements on torrnode7 (pull = size of each weighted term's
+gradient over the encoder weights, logged every 200 steps):
+  residual arm: prediction's share of the total pull 0 -> 2 -> 6 -> 7% through
+  the epoch; rank 6 -> 374; inv/trivial stuck at 0.996-0.999; cosine between
+  prediction and regulariser pulls +0.3 falling to +0.06 (not opposed, just weak).
+  normalise-both-sides: prediction share 11%, inv/trivial 1.43.
+  plain: prediction share 27% (because its predictor is 2.6x worse than copying,
+  so its error is large), inv/trivial 2.56.
+Conclusion: with the standard 25/25/1 weights the regulariser steers the
+encoder almost entirely; the predictor learns nothing about motion. Cause: the
+change of an embedding over 8 fs is tiny in absolute terms, so even a predictor
+that gets the change completely wrong has a small error and a small gradient.
+
+Fix added as a fourth arm (jepa_pretrain_residrel_organic8, torrnode7 GPU 5):
+residual predictor with the prediction error divided by the error of plain
+copying, i.e. the loss term is inv/trivial itself. Copying scores 1 and
+explaining half the change scores 0.25 whatever the absolute size of the change,
+so the prediction pull is proportional to how much of the change is explained
+rather than to the scale of the embedding; no stride- or dataset-specific
+weight retuning. The three running arms are kept as the controls that document
+the problem. Weight retuning for a next round is to be done from the logged
+pulls of all four arms, not by hand tonight.

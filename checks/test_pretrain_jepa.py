@@ -124,6 +124,16 @@ def test_predictor_variants():
     assert torch.allclose(n.mean(-1), torch.zeros(10), atol=1e-5) and torch.allclose(n.std(-1, unbiased=False), torch.ones(10), atol=1e-3)
 
 
+def test_relative_loss():
+    pred = Predictor(16, 32, variant="residual")           # starts as an exact copy
+    z_now = torch.randn(50, 16); z_fut = z_now + 0.01 * torch.randn(50, 16)
+    loss, parts = jepa_loss(z_now, z_fut, pred, 1.0, 0.0, 0.0, relative=True)
+    assert abs(loss.item() - 1.0) < 1e-4, loss.item()       # copying scores exactly 1
+    half = lambda z: z + 0.5 * (z_fut - z)                  # a predictor that explains half the change
+    inv = torch.nn.functional.mse_loss(half(z_now), z_fut) / torch.nn.functional.mse_loss(z_now, z_fut)
+    assert abs(inv.item() - 0.25) < 1e-6                    # half the change left -> a quarter of the squared error
+
+
 def test_loss_decreases(model, data):
     model.train()
     now, fut = make_batch(data.frames[:6], model, torch.float32, "cpu", augment=False)
@@ -190,6 +200,7 @@ if __name__ == "__main__":
     model, data = test_augmentation_and_invariance(hypers, masses, timestep, info); print("ok augmentation and invariance")
     test_vicreg(); print("ok vicreg terms")
     test_predictor_variants(); print("ok predictor variants")
+    test_relative_loss(); print("ok relative loss")
     test_loss_decreases(model, data); print("ok loss decreases")
     test_end_to_end_and_checkpoint(masses); print("ok end to end, resume, checkpoint loads for finetune")
-    print("all 6 tests passed")
+    print("all 7 tests passed")

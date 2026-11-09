@@ -235,13 +235,16 @@ def vicreg_terms(z):
     return var_loss, cov_loss, diag
 
 
-def term_pulls(z_now, z_fut, pred, model, w_inv, w_var, w_cov):
+def term_pulls(z_now, z_fut, pred, model, w_inv, w_var, w_cov, relative=False):
     """How hard each weighted term pushes on the ENCODER's weights: the size of its
     gradient over the encoder parameters, and the cosine between the prediction push
     and the regulariser push (negative means they pull in opposite directions)."""
     enc_params = [p for p in model.parameters() if p.requires_grad]
     z_hat = pred(z_now)
-    inv = w_inv * torch.nn.functional.mse_loss(z_hat, z_fut)
+    inv = torch.nn.functional.mse_loss(z_hat, z_fut)
+    if relative:
+        inv = inv / torch.nn.functional.mse_loss(z_now, z_fut).detach().clamp(min=1e-12)
+    inv = w_inv * inv
     v1, c1, _ = vicreg_terms(z_now)
     v2, c2, _ = vicreg_terms(z_fut)
     var = w_var * 0.5 * (v1 + v2)
@@ -260,9 +263,15 @@ def term_pulls(z_now, z_fut, pred, model, w_inv, w_var, w_cov):
     return out
 
 
-def jepa_loss(z_now, z_fut, pred, w_inv, w_var, w_cov):
+def jepa_loss(z_now, z_fut, pred, w_inv, w_var, w_cov, relative=False):
     z_hat = pred(z_now)
     inv = torch.nn.functional.mse_loss(z_hat, z_fut)
+    if relative:
+        # prediction error measured against the size of the actual change (the error of plain
+        # copying), so copying scores 1 and explaining half the change scores 0.5, whatever the
+        # absolute size of the change; the mean-squared difference is kept as the gradient
+        # carrier so the batch's copying error enters as a scale, not as something to shrink
+        inv = inv / torch.nn.functional.mse_loss(z_now, z_fut).detach().clamp(min=1e-12)
     v1, c1, d1 = vicreg_terms(z_now)
     v2, c2, _ = vicreg_terms(z_fut)
     var = 0.5 * (v1 + v2)
@@ -296,6 +305,8 @@ def main():
     ap.add_argument("--predictor", default="norm_target", choices=Predictor.VARIANTS,
                     help="plain | norm_input (first run's design) | norm_target (I-JEPA style, default) | residual")
     ap.add_argument("--residual_predictor", action="store_true", help="same as --predictor residual")
+    ap.add_argument("--relative_loss", action="store_true",
+                    help="prediction error divided by the error of plain copying (so it is inv/trivial itself)")
     ap.add_argument("--pull_every", type=int, default=200,
                     help="every N steps, log how hard each loss term pushes on the encoder (0 disables)")
     ap.add_argument("--projector_dim", type=int, default=0,
@@ -338,7 +349,8 @@ def main():
     pred = Predictor(d_loss, args.pred_hidden, variant=variant).to(device=device, dtype=dtype)
     # for norm_target the normalising step sits at the encoder output, for both frames
     embed = normalise_embeddings if variant == "norm_target" else (lambda z: z)
-    print(f"predictor variant: {variant}; projector: {args.projector_dim or 'none'}", flush=True)
+    print(f"predictor variant: {variant}; projector: {args.projector_dim or 'none'}; "
+          f"prediction loss: {'relative to copying' if args.relative_loss else 'absolute'}", flush=True)
     print(f"feature dimension {d}; encoder {sum(p.numel() for p in model.parameters()) / 1e6:.1f}M, "
           f"predictor {sum(p.numel() for p in pred.parameters()) / 1e6:.1f}M parameters", flush=True)
 
@@ -390,13 +402,13 @@ def main():
             z_now = encode(model, now)
             z_fut = encode(model, fut)
             e_now, e_fut = embed(proj(z_now)), embed(proj(z_fut))
-            loss, parts = jepa_loss(e_now, e_fut, pred, args.w_inv, args.w_var, args.w_cov)
+            loss, parts = jepa_loss(e_now, e_fut, pred, args.w_inv, args.w_var, args.w_cov, args.relative_loss)
             if b % 200 == 0:
                 if args.projector_dim > 0:   # the encoder's own features, as well as the loss space
                     _, _, de = vicreg_terms(z_now.detach())
                     parts.update({"enc_rank": de["eff_rank"], "enc_dead": de["dead_frac"]})
                 if args.pull_every and b % args.pull_every == 0:
-                    pulls = term_pulls(e_now, e_fut, pred, model, args.w_inv, args.w_var, args.w_cov)
+                    pulls = term_pulls(e_now, e_fut, pred, model, args.w_inv, args.w_var, args.w_cov, args.relative_loss)
                     parts.update(pulls)
                     pull_log.append({"epoch": epoch, "step": b, **pulls})
             opt.zero_grad(set_to_none=True)
@@ -423,7 +435,7 @@ def main():
             for b in range(0, len(val), args.batch_size):
                 now, fut = make_batch(val.frames[b:b + args.batch_size], model, dtype, device, augment=False)
                 h_now = encode(model, now)
-                loss, parts = jepa_loss(embed(proj(h_now)), embed(proj(encode(model, fut))), pred, args.w_inv, args.w_var, args.w_cov)
+                loss, parts = jepa_loss(embed(proj(h_now)), embed(proj(encode(model, fut))), pred, args.w_inv, args.w_var, args.w_cov, args.relative_loss)
                 _, _, de = vicreg_terms(h_now)
                 parts.update({"enc_rank": de["eff_rank"], "enc_dead": de["dead_frac"]})
                 parts["loss"] = loss.item()
