@@ -183,23 +183,37 @@ class Projector(torch.nn.Module):
 
 
 class Predictor(torch.nn.Module):
-    """Maps the current embedding to the predicted future embedding.
-    residual=True predicts the CHANGE and adds it to the current embedding
-    (future = current + f(current)), with the last layer started at zero, so the
-    predictor starts as an exact copy and only has to learn what moves."""
+    """Maps the current embedding to the predicted future embedding. Variants:
+      plain        guess = f(now); no normalisation anywhere
+      norm_input   guess = f(normalise(now)); target NOT normalised (the first run's design:
+                   the predictor has to undo the normalisation, which makes copying hard)
+      norm_target  one normalising step on the encoder output for BOTH frames, applied
+                   outside the predictor (see normalise_embeddings); here guess = f(now)
+      residual     guess = now + f(now), with f's last layer started at zero so the
+                   predictor begins as an exact copy and only learns the change"""
 
-    def __init__(self, d, hidden, residual=False):
+    VARIANTS = ("plain", "norm_input", "norm_target", "residual")
+
+    def __init__(self, d, hidden, variant="norm_target"):
         super().__init__()
-        self.residual = residual
-        self.net = torch.nn.Sequential(
-            torch.nn.LayerNorm(d), torch.nn.Linear(d, hidden), torch.nn.GELU(),
-            torch.nn.Linear(hidden, hidden), torch.nn.GELU(), torch.nn.Linear(hidden, d))
-        if residual:
+        assert variant in self.VARIANTS, variant
+        self.variant = variant
+        layers = [torch.nn.Linear(d, hidden), torch.nn.GELU(), torch.nn.Linear(hidden, hidden), torch.nn.GELU(),
+                  torch.nn.Linear(hidden, d)]
+        if variant in ("norm_input", "residual"):
+            layers = [torch.nn.LayerNorm(d)] + layers
+        self.net = torch.nn.Sequential(*layers)
+        if variant == "residual":
             torch.nn.init.zeros_(self.net[-1].weight)
             torch.nn.init.zeros_(self.net[-1].bias)
 
     def forward(self, z):
-        return z + self.net(z) if self.residual else self.net(z)
+        return z + self.net(z) if self.variant == "residual" else self.net(z)
+
+
+def normalise_embeddings(z):
+    """Per atom: mean 0 and spread 1 over the 640 numbers (a fixed LayerNorm without learnt scale)."""
+    return torch.nn.functional.layer_norm(z, z.shape[-1:])
 
 
 def vicreg_terms(z):
@@ -219,6 +233,31 @@ def vicreg_terms(z):
         diag = {"std": std.mean().item(), "std_min": std.min().item(),
                 "dead_frac": (std < 0.5).float().mean().item(), "eff_rank": eff_rank}
     return var_loss, cov_loss, diag
+
+
+def term_pulls(z_now, z_fut, pred, model, w_inv, w_var, w_cov):
+    """How hard each weighted term pushes on the ENCODER's weights: the size of its
+    gradient over the encoder parameters, and the cosine between the prediction push
+    and the regulariser push (negative means they pull in opposite directions)."""
+    enc_params = [p for p in model.parameters() if p.requires_grad]
+    z_hat = pred(z_now)
+    inv = w_inv * torch.nn.functional.mse_loss(z_hat, z_fut)
+    v1, c1, _ = vicreg_terms(z_now)
+    v2, c2, _ = vicreg_terms(z_fut)
+    var = w_var * 0.5 * (v1 + v2)
+    cov = w_cov * 0.5 * (c1 + c2)
+    out = {}
+    grads = {}
+    for name, term in (("inv", inv), ("var", var), ("cov", cov)):
+        g = torch.autograd.grad(term, enc_params, retain_graph=True, allow_unused=True)
+        flat = torch.cat([x.reshape(-1) for x in g if x is not None])
+        grads[name] = flat
+        out[f"pull_{name}"] = flat.norm().item()
+    reg = grads["var"] + grads["cov"]
+    out["pull_cos_inv_reg"] = torch.nn.functional.cosine_similarity(grads["inv"], reg, dim=0).item()
+    tot = out["pull_inv"] + out["pull_var"] + out["pull_cov"]
+    out["pull_inv_share"] = out["pull_inv"] / max(tot, 1e-12)
+    return out
 
 
 def jepa_loss(z_now, z_fut, pred, w_inv, w_var, w_cov):
@@ -254,8 +293,11 @@ def main():
     ap.add_argument("--w_var", type=float, default=25.0)
     ap.add_argument("--w_cov", type=float, default=1.0)
     ap.add_argument("--pred_hidden", type=int, default=1024)
-    ap.add_argument("--residual_predictor", action="store_true",
-                    help="predict the change of the embedding (future = current + f(current)), starting from a copy")
+    ap.add_argument("--predictor", default="norm_target", choices=Predictor.VARIANTS,
+                    help="plain | norm_input (first run's design) | norm_target (I-JEPA style, default) | residual")
+    ap.add_argument("--residual_predictor", action="store_true", help="same as --predictor residual")
+    ap.add_argument("--pull_every", type=int, default=200,
+                    help="every N steps, log how hard each loss term pushes on the encoder (0 disables)")
     ap.add_argument("--projector_dim", type=int, default=0,
                     help="0: regulariser and prediction act on the encoder features directly; "
                          ">0: on the output of a projector network of this width (VICReg expander)")
@@ -292,7 +334,11 @@ def main():
     else:
         proj = torch.nn.Identity()
         d_loss = d
-    pred = Predictor(d_loss, args.pred_hidden, residual=args.residual_predictor).to(device=device, dtype=dtype)
+    variant = "residual" if args.residual_predictor else args.predictor
+    pred = Predictor(d_loss, args.pred_hidden, variant=variant).to(device=device, dtype=dtype)
+    # for norm_target the normalising step sits at the encoder output, for both frames
+    embed = normalise_embeddings if variant == "norm_target" else (lambda z: z)
+    print(f"predictor variant: {variant}; projector: {args.projector_dim or 'none'}", flush=True)
     print(f"feature dimension {d}; encoder {sum(p.numel() for p in model.parameters()) / 1e6:.1f}M, "
           f"predictor {sum(p.numel() for p in pred.parameters()) / 1e6:.1f}M parameters", flush=True)
 
@@ -328,6 +374,7 @@ def main():
         run_name = os.path.basename(args.out.rstrip("/"))
         run = wandb.init(project=args.wandb, name=run_name, id=run_name, config=vars(args), resume="allow")
 
+    pull_log = []
     rng = np.random.default_rng(args.seed + start_epoch)
     for epoch in range(start_epoch, args.epochs):
         model.train(); pred.train(); proj.train()
@@ -342,10 +389,16 @@ def main():
                 g["lr"] = lr_at(step)
             z_now = encode(model, now)
             z_fut = encode(model, fut)
-            loss, parts = jepa_loss(proj(z_now), proj(z_fut), pred, args.w_inv, args.w_var, args.w_cov)
-            if args.projector_dim > 0 and b % 200 == 0:   # the encoder's own features, as well as the loss space
-                _, _, de = vicreg_terms(z_now.detach())
-                parts.update({"enc_rank": de["eff_rank"], "enc_dead": de["dead_frac"]})
+            e_now, e_fut = embed(proj(z_now)), embed(proj(z_fut))
+            loss, parts = jepa_loss(e_now, e_fut, pred, args.w_inv, args.w_var, args.w_cov)
+            if b % 200 == 0:
+                if args.projector_dim > 0:   # the encoder's own features, as well as the loss space
+                    _, _, de = vicreg_terms(z_now.detach())
+                    parts.update({"enc_rank": de["eff_rank"], "enc_dead": de["dead_frac"]})
+                if args.pull_every and b % args.pull_every == 0:
+                    pulls = term_pulls(e_now, e_fut, pred, model, args.w_inv, args.w_var, args.w_cov)
+                    parts.update(pulls)
+                    pull_log.append({"epoch": epoch, "step": b, **pulls})
             opt.zero_grad(set_to_none=True)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(params, 1.0)
@@ -353,12 +406,14 @@ def main():
             step += 1
             parts["loss"] = loss.item()
             for k, v in parts.items():
-                if not k.startswith("enc_"):
+                if not (k.startswith("enc_") or k.startswith("pull_")):
                     agg[k] = agg.get(k, 0.0) + v
             if b % 200 == 0:
+                pull_txt = (f" | pull on encoder: inv {parts['pull_inv']:.3g} var {parts['pull_var']:.3g} cov {parts['pull_cov']:.3g} "
+                            f"(inv share {parts['pull_inv_share']:.2f}, cos {parts['pull_cos_inv_reg']:+.2f})") if "pull_inv" in parts else ""
                 print(f"  epoch {epoch} step {b}/{steps_per_epoch} loss {loss.item():.4f} inv/trivial {parts['inv_ratio']:.3f} "
                       f"var {parts['var']:.4f} cov {parts['cov']:.4f} std_min {parts['std_min']:.3f} "
-                      f"dead {parts['dead_frac']:.2f} rank {parts['eff_rank']:.0f}", flush=True)
+                      f"dead {parts['dead_frac']:.2f} rank {parts['eff_rank']:.0f}{pull_txt}", flush=True)
         train_log = {f"train_{k}": v / steps_per_epoch for k, v in agg.items()}
 
         model.eval(); pred.eval(); proj.eval()
@@ -368,7 +423,7 @@ def main():
             for b in range(0, len(val), args.batch_size):
                 now, fut = make_batch(val.frames[b:b + args.batch_size], model, dtype, device, augment=False)
                 h_now = encode(model, now)
-                loss, parts = jepa_loss(proj(h_now), proj(encode(model, fut)), pred, args.w_inv, args.w_var, args.w_cov)
+                loss, parts = jepa_loss(embed(proj(h_now)), embed(proj(encode(model, fut))), pred, args.w_inv, args.w_var, args.w_cov)
                 _, _, de = vicreg_terms(h_now)
                 parts.update({"enc_rank": de["eff_rank"], "enc_dead": de["dead_frac"]})
                 parts["loss"] = loss.item()
@@ -378,6 +433,8 @@ def main():
         val_log = {f"val_{k}": v / max(nv, 1) for k, v in vagg.items()}
         rec = {"epoch": epoch, "lr": lr_at(step - 1), "seconds": time.time() - t_ep, **train_log, **val_log}
         history.append(rec)
+        if run is not None and pull_log:
+            run.log({k: v for k, v in pull_log[-1].items() if k.startswith("pull_")}, step=epoch, commit=False)
         print(f"epoch {epoch}: train loss {rec['train_loss']:.4f} | val loss {rec['val_loss']:.4f} "
               f"inv/trivial {rec['val_inv_ratio']:.3f} var {rec['val_var']:.4f} cov {rec['val_cov']:.4f} "
               f"std_min {rec['val_std_min']:.3f} dead {rec['val_dead_frac']:.2f} rank {rec['val_eff_rank']:.0f} "
@@ -395,9 +452,11 @@ def main():
         torch.save(pred.state_dict(), os.path.join(args.out, "predictor.pt"))
         with open(os.path.join(args.out, "history.json"), "w") as f:
             json.dump(history, f, indent=1)
+        with open(os.path.join(args.out, "pulls.json"), "w") as f:
+            json.dump(pull_log, f, indent=1)
 
     with open(os.path.join(args.out, "manifest.json"), "w") as f:
-        json.dump({"args": vars(args), "feature_dim": d, "train_pairs": len(train), "val_pairs": len(val),
+        json.dump({"args": vars(args), "predictor_variant": variant, "feature_dim": d, "train_pairs": len(train), "val_pairs": len(val),
                    "masses": masses, "timestep_fs": timestep, "model_hypers": model_hypers}, f, indent=1)
     print("done:", os.path.join(args.out, "pretrained.ckpt"))
     if run is not None:

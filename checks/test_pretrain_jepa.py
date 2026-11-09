@@ -13,6 +13,7 @@ and contains the trained encoder weights; a two-epoch end-to-end run resumes fro
 state file.
 """
 
+import json
 import os
 import subprocess
 import sys
@@ -112,10 +113,15 @@ def test_vicreg():
     assert c.item() > 0.5 and d["eff_rank"] < 4.5
 
 
-def test_residual_predictor_starts_as_copy():
-    pred = Predictor(16, 32, residual=True)
-    z = torch.randn(10, 16)
+def test_predictor_variants():
+    z = torch.randn(10, 16) * 5 + 2
+    pred = Predictor(16, 32, variant="residual")
     assert torch.allclose(pred(z), z), "residual predictor must start as an exact copy"
+    for v in Predictor.VARIANTS:
+        assert Predictor(16, 32, variant=v)(z).shape == z.shape
+    from train.pretrain_jepa import normalise_embeddings
+    n = normalise_embeddings(z)
+    assert torch.allclose(n.mean(-1), torch.zeros(10), atol=1e-5) and torch.allclose(n.std(-1, unbiased=False), torch.ones(10), atol=1e-3)
 
 
 def test_loss_decreases(model, data):
@@ -140,6 +146,12 @@ def test_end_to_end_and_checkpoint(masses):
         out = os.path.join(d, "run")
         common = [sys.executable, script, CONFIG, "--train", os.path.join(d, "train.xyz"), "--val", os.path.join(d, "val.xyz"),
                   "--out", out, "--batch_size", "4", "--pred_hidden", "64"]
+        for v in ("plain", "residual"):   # the other variants share the code path
+            r = subprocess.run(common[:-2] + ["--out", out + "_" + v, "--epochs", "1", "--predictor", v, "--pull_every", "1"],
+                               capture_output=True, text=True)
+            assert r.returncode == 0, v + r.stdout[-2000:] + r.stderr[-3000:]
+            pulls = json.load(open(os.path.join(out + "_" + v, "pulls.json")))
+            assert pulls and all(k in pulls[0] for k in ("pull_inv", "pull_var", "pull_cov", "pull_cos_inv_reg")), pulls[:1]
         r = subprocess.run(common + ["--epochs", "1"], capture_output=True, text=True)
         assert r.returncode == 0, r.stdout[-2000:] + r.stderr[-3000:]
         st1 = torch.load(os.path.join(out, "state.pt"), map_location="cpu", weights_only=False)
@@ -177,7 +189,7 @@ if __name__ == "__main__":
     cfg, hypers, masses, timestep, info = test_config_and_data(); print("ok config and data")
     model, data = test_augmentation_and_invariance(hypers, masses, timestep, info); print("ok augmentation and invariance")
     test_vicreg(); print("ok vicreg terms")
-    test_residual_predictor_starts_as_copy(); print("ok residual predictor starts as a copy")
+    test_predictor_variants(); print("ok predictor variants")
     test_loss_decreases(model, data); print("ok loss decreases")
     test_end_to_end_and_checkpoint(masses); print("ok end to end, resume, checkpoint loads for finetune")
     print("all 6 tests passed")

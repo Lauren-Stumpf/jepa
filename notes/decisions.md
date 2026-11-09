@@ -339,3 +339,35 @@ random rotations teaches the encoder to be completely independent of
 orientation, which the heads cannot work with; there is no reason to spend
 compute confirming it. The --independent_rotations flag stays in the script but
 is not run.
+
+## 2026-11-09 (evening): the predictor's normalisation, and three clean arms
+
+The first pretraining (jepa_pretrain_organic8) normalised the predictor's input
+but not its target, so the predictor had to undo the normalisation to reproduce
+a near-copy of its input; after three epochs its error was still twice that of
+plain copying (inv/trivial 2.05), and about 88% of the loss was the covariance
+term. Lauren's points: normalising only one side has no purpose; the current run
+is not a fair baseline for a residual predictor; and the question of whether
+the regulariser rather than prediction is steering the encoder should be
+measured, not inferred from loss sizes.
+
+Three clean arms, identical apart from the predictor:
+  plain        no normalisation anywhere
+  norm_target  one fixed normalising step at the encoder output, both frames
+               (what I-JEPA and V-JEPA do; the new default)
+  residual     guess = now + f(now), f's last layer started at zero so the
+               predictor begins as an exact copy (Lauren's idea)
+They run on torrnode7, one per GPU; their 10% fine-tunes (three seeds each) run
+on torrnode12 through the launcher once each pretraining finishes. The first
+run (norm_input) and the projector run continue on torrnode12 for comparison.
+
+Measuring the pull of each term: every 200 steps the script computes, for each
+weighted loss term separately, the size of its gradient over the encoder's
+weights, and the cosine between the prediction gradient and the regulariser
+gradient; logged to pulls.json and the training log. Rule for the weights: the
+regulariser should pull just hard enough to keep the features spread out
+(dead fraction near 0, rank not falling) and no harder; if its pull is several
+times the prediction pull while inv/trivial does not improve, the weights come
+down. The 25/25/1 weights are the image defaults and will be reset from these
+measurements. The covariance term's division by 640 is the standard definition;
+the balance is set through the weights, not by changing the definition.
