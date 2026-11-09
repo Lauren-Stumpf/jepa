@@ -56,7 +56,7 @@ def _metatrain_one_step(atoms, model, stride_fs, device, scaled_targets, momenta
     # unscaled), reads system data "momentum" and "mass", buffer "timestep".
     from metatensor.torch import Labels, TensorBlock, TensorMap
     from metatomic.torch import ModelEvaluationOptions, ModelOutput, System
-    from metatomic.torch.ase_calculator import _ase_to_torch_data
+    from metatomic.torch import systems_to_torch
     from metatrain.utils.neighbor_lists import get_system_with_neighbor_lists
     key = id(model)
     if key not in _stepper_cache:
@@ -67,7 +67,7 @@ def _metatrain_one_step(atoms, model, stride_fs, device, scaled_targets, momenta
         _stepper_cache[key] = (None, getattr(torch, caps.dtype))
     _, dtype = _stepper_cache[key]
     dev = torch.device(device)
-    system = System(*_ase_to_torch_data(atoms, dtype=dtype, device=dev))
+    system = systems_to_torch(atoms, dtype=dtype, device=dev)
     n = len(atoms)
     samples = Labels(names=["system", "atom"], values=torch.tensor([[0, j] for j in range(n)], device=dev))
     xyz = Labels(names="xyz", values=torch.tensor([[0], [1], [2]], device=dev))

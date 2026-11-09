@@ -9,3 +9,4 @@ __pycache__/
 outputs/
 wandb/
 .venv-train/
+results/data/catalogue_8fs*.csv
