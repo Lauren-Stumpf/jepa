@@ -1,0 +1,77 @@
+
+=== 0. catalogue present
+
+=== 1. unit tests
+all 10 tests passed
+
+=== 2. prepare the organic subset (no frame excluded: the distributions show no explosions)
+config configs/flashmd_organic8_scratch.yaml: model cutoff 4.5 A, masses {1: 1.00794, 6: 12.0107, 7: 14.00674, 8: 15.9994}
+rule 1 (elements within H,C,N,O and contains C): 672 of 10000 structures kept
+rule 2a (periodic cell): 0 non-periodic organic structures excluded
+rule 2b (volume per atom > 60.0 A^3): distribution over the 672 periodic organic structures, so the threshold can be seen against a gap:
+  volume per atom: n=672, min=5.43, max=5.78e+03 A^3
+    [       5,       10) A^3: 374
+    [      10,       15) A^3: 78
+    [      15,       20) A^3: 2
+    [      20,       30) A^3: 2
+    [      30,       40) A^3: 4
+    [      40,       50) A^3: 1
+    [      60,       80) A^3: 1
+    [     100,      150) A^3: 1
+    [     400,    1e+09) A^3: 209
+  nearest values either side of the threshold: 42.0 and 69.0 A^3/atom
+  kept 211, excluded 461
+rule 3 (at least 0 atoms): excluded 0
+rule 4 (one copy per molecule): 1 duplicate copies excluded: C9H10N2O4 (group 5294)
+selected 210 structures, 105000 frames
+split by structure: {'train': 168, 'val': 21, 'test': 21}
+reading 105000 selected frames (scanning the file up to frame 4932999)
+  20000 frames read
+  40000 frames read
+  60000 frames read
+  80000 frames read
+  100000 frames read
+frame diagnostics over the selected frames (recorded, not used to drop):
+  kinetic temperature: n=105000, min=0.382, max=5.02e+03 K
+    [       0,      100) K: 6833
+    [     100,      200) K: 6827
+    [     200,      300) K: 6927
+    [     300,      400) K: 6453
+    [     400,      600) K: 13396
+    [     600,      800) K: 13813
+    [     800,    1e+03) K: 12996
+    [   1e+03,  1.5e+03) K: 26572
+    [ 1.5e+03,    2e+03) K: 9628
+    [   2e+03,    3e+03) K: 1492
+    [   3e+03,    5e+03) K: 62
+    [   5e+03,    1e+04) K: 1
+  raw max displacement over 8 fs: n=105000, min=0.00772, max=1.34 A
+    [       0,      0.1) A: 3932
+    [     0.1,      0.2) A: 9920
+    [     0.2,      0.3) A: 13960
+    [     0.3,      0.5) A: 39836
+    [     0.5,     0.75) A: 32578
+    [    0.75,        1) A: 4604
+    [       1,      1.5) A: 170
+  frames with more than one piece: 5582; by molecule (top 10): {'CHN5': 500, 'CN7': 500, 'C2N8O2': 500, 'C12H14N2O2': 300, 'C7H14O6': 299, 'C12H20N4O10': 250, 'C3H6N6O2': 203, 'C6H9N17': 201, 'C6H5NO2': 157, 'C7H10N4O5': 106}
+  frames where the model sees the molecule's own image (n_image_pairs > 0): 1115; by molecule: {'C12O8': 500, 'C2N8O2': 491, 'C12H20N4O10': 50, 'C3H6N6O2': 50, 'C12H14N2O2': 9, 'C12H26N4': 9, 'C4H9NO4': 3, 'CN7': 2, 'C3H6N6O6': 1}
+exploded-run rule (T > 1000000000.0 K or max displacement > 1000000000.0 A): 0 frames excluded
+largest relative difference between config masses and the file's masses: 2.50e-05
+written {'train': 84000, 'val': 10500, 'test': 10500} -> data/organic8
+manifest and frames.csv written
+
+=== 3. smoke subset
+train 4200 -> data/organic8/smoke_train.xyz
+val 525 -> data/organic8/smoke_val.xyz
+
+=== 4. packages
+metatrain 2025.10
+
+=== 5. wandb login (skipped if already logged in)
+wandb: W&B API key is configured. Use `wandb login --relogin` to force relogin
+
+=== 6. augmentation check
+Traceback (most recent call last):
+  File "/storage3/lauren/code/jepa/checks/check_augmentation.py", line 13, in <module>
+    from metatrain.utils.augmentation import O3Augmenter
+ImportError: cannot import name 'O3Augmenter' from 'metatrain.utils.augmentation' (/storage3/lauren/code/flashmd/.venv/lib/python3.11/site-packages/metatrain/utils/augmentation.py)

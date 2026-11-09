@@ -1,0 +1,15 @@
+
+=== 0. all 280 runs present and complete
+all 280 runs complete
+
+=== 1. the seven checks on every run (about a minute per run; SKIP_RUN_CHECKS=1 to skip if already done)
+all runs pass
+
+=== 1b. run-mean temperatures across all runs (centre, spread, outliers)
+280 runs: mean of run-mean temperatures 294.7 K (standard error 0.7 K), spread 11.1 K (estimate 12.5 K)
+most extreme runs: run_192 325.7 K (z = +2.8), run_070 264.4 K (z = -2.7), run_163 323.0 K (z = +2.6), run_237 322.2 K (z = +2.5), run_109 270.2 K (z = -2.2)
+[FAIL] centred on 300 K: 294.7 K
+[PASS] spread of run means: 11.1 K vs estimate 12.5 K
+[PASS] no outlier beyond chance: largest |z| 2.8, typical largest for 280 runs 3.4
+SOME CHECKS FAILED
+temperature distribution check failed
