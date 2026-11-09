@@ -331,3 +331,11 @@ prediction and regulariser in the projector's output space; the encoder's own
 rank and dead fraction are logged separately), with its own three 10% fine-tune
 seeds. Check after the first epoch of each: encoder rank rising into the
 hundreds and dead fraction falling, and inv/trivial below 1.
+
+## 2026-11-09: different-spin arm dropped
+
+Lauren's decision: no independent-rotation arm. Giving the two frames different
+random rotations teaches the encoder to be completely independent of
+orientation, which the heads cannot work with; there is no reason to spend
+compute confirming it. The --independent_rotations flag stays in the script but
+is not run.
