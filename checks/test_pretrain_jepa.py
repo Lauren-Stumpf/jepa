@@ -112,6 +112,12 @@ def test_vicreg():
     assert c.item() > 0.5 and d["eff_rank"] < 4.5
 
 
+def test_residual_predictor_starts_as_copy():
+    pred = Predictor(16, 32, residual=True)
+    z = torch.randn(10, 16)
+    assert torch.allclose(pred(z), z), "residual predictor must start as an exact copy"
+
+
 def test_loss_decreases(model, data):
     model.train()
     now, fut = make_batch(data.frames[:6], model, torch.float32, "cpu", augment=False)
@@ -171,6 +177,7 @@ if __name__ == "__main__":
     cfg, hypers, masses, timestep, info = test_config_and_data(); print("ok config and data")
     model, data = test_augmentation_and_invariance(hypers, masses, timestep, info); print("ok augmentation and invariance")
     test_vicreg(); print("ok vicreg terms")
+    test_residual_predictor_starts_as_copy(); print("ok residual predictor starts as a copy")
     test_loss_decreases(model, data); print("ok loss decreases")
     test_end_to_end_and_checkpoint(masses); print("ok end to end, resume, checkpoint loads for finetune")
-    print("all 5 tests passed")
+    print("all 6 tests passed")

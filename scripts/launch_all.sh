@@ -56,7 +56,9 @@ while read -r name cfg; do
   if tmux has-session -t "train_$name" 2>/dev/null; then echo "  $name: already running"; continue; fi
   if [ "$is_pretrain" = 0 ]; then
     if [ ! -s "$train_file" ]; then echo "  $name: no training data yet ($train_file), skipped"; continue; fi
-    if [ -n "$ckpt" ] && [ ! -s "$ckpt" ]; then echo "  $name: pretrained checkpoint not ready ($ckpt), skipped"; continue; fi
+    # a fine-tune must start from the FINISHED pretraining: pretrained.ckpt is rewritten after every
+    # epoch, so its existence is not enough; the pretraining writes manifest.json only when it ends
+    if [ -n "$ckpt" ] && [ ! -f "$(dirname "$ckpt")/manifest.json" ]; then echo "  $name: pretraining not finished ($(dirname "$ckpt")), skipped"; continue; fi
   fi
   gpu=""
   for attempt in $(seq 1 144); do   # wait up to 24 h for a GPU

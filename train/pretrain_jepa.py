@@ -183,14 +183,23 @@ class Projector(torch.nn.Module):
 
 
 class Predictor(torch.nn.Module):
-    def __init__(self, d, hidden):
+    """Maps the current embedding to the predicted future embedding.
+    residual=True predicts the CHANGE and adds it to the current embedding
+    (future = current + f(current)), with the last layer started at zero, so the
+    predictor starts as an exact copy and only has to learn what moves."""
+
+    def __init__(self, d, hidden, residual=False):
         super().__init__()
+        self.residual = residual
         self.net = torch.nn.Sequential(
             torch.nn.LayerNorm(d), torch.nn.Linear(d, hidden), torch.nn.GELU(),
             torch.nn.Linear(hidden, hidden), torch.nn.GELU(), torch.nn.Linear(hidden, d))
+        if residual:
+            torch.nn.init.zeros_(self.net[-1].weight)
+            torch.nn.init.zeros_(self.net[-1].bias)
 
     def forward(self, z):
-        return self.net(z)
+        return z + self.net(z) if self.residual else self.net(z)
 
 
 def vicreg_terms(z):
@@ -245,6 +254,8 @@ def main():
     ap.add_argument("--w_var", type=float, default=25.0)
     ap.add_argument("--w_cov", type=float, default=1.0)
     ap.add_argument("--pred_hidden", type=int, default=1024)
+    ap.add_argument("--residual_predictor", action="store_true",
+                    help="predict the change of the embedding (future = current + f(current)), starting from a copy")
     ap.add_argument("--projector_dim", type=int, default=0,
                     help="0: regulariser and prediction act on the encoder features directly; "
                          ">0: on the output of a projector network of this width (VICReg expander)")
@@ -281,7 +292,7 @@ def main():
     else:
         proj = torch.nn.Identity()
         d_loss = d
-    pred = Predictor(d_loss, args.pred_hidden).to(device=device, dtype=dtype)
+    pred = Predictor(d_loss, args.pred_hidden, residual=args.residual_predictor).to(device=device, dtype=dtype)
     print(f"feature dimension {d}; encoder {sum(p.numel() for p in model.parameters()) / 1e6:.1f}M, "
           f"predictor {sum(p.numel() for p in pred.parameters()) / 1e6:.1f}M parameters", flush=True)
 
