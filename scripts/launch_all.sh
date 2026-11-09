@@ -40,7 +40,7 @@ ours=""
 for f in results/runs/*/gpu; do
   [ -f "$f" ] || continue
   n=$(basename "$(dirname "$f")")
-  tmux has-session -t "train_$n" 2>/dev/null && ours="$ours $(cat "$f")"
+  tmux has-session -t "=train_$n" 2>/dev/null && ours="$ours $(cat "$f")"
 done
 pick_gpu() {  # $1 = how many of our runs may share the GPU (1 = needs an empty GPU)
   # eligible: empty, or (when sharing is allowed) only our runs on it and room for one more
@@ -59,11 +59,11 @@ while read -r name cfg; do
     done_file="results/runs/$name/manifest.json"
   else
     done_file="results/runs/$name/model.pt"
-    train_file=$(grep -m1 "read_from:" "$cfg" | awk '{print $2}')
-    ckpt=$(grep -m1 "read_from: results" "$cfg" | awk '{print $2}')
+    train_file=$(awk '/^training_set:/{f=1} f && /read_from:/{print $2; exit}' "$cfg")
+    ckpt=$(grep -m1 "read_from: /storage3" "$cfg" | awk '{print $2}')
   fi
   if [ -f "$done_file" ]; then echo "  $name: finished"; continue; fi
-  if tmux has-session -t "train_$name" 2>/dev/null; then echo "  $name: already running"; continue; fi
+  if tmux has-session -t "=train_$name" 2>/dev/null; then echo "  $name: already running"; continue; fi
   if [ "$is_pretrain" = 0 ]; then
     if [ ! -s "$train_file" ]; then echo "  $name: no training data yet ($train_file), skipped"; continue; fi
     # a fine-tune must start from the FINISHED pretraining: pretrained.ckpt is rewritten after every

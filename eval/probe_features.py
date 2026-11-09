@@ -64,6 +64,18 @@ def features_and_targets(model, data, masses, device, batch=64):
     return np.concatenate(X), np.concatenate(Y), np.concatenate(S)
 
 
+def pooled_r2(X, Y, lam=1e-3, train_frac=0.7, seed=0):
+    """Fraction of the total variance of Y (all columns pooled) explained by a ridge fit on X;
+    robust to near-constant columns of Y, unlike a per-column R^2."""
+    rng = np.random.default_rng(seed)
+    idx = rng.permutation(len(X)); ntr = int(train_frac * len(X)); tr, te = idx[:ntr], idx[ntr:]
+    mu, sd = X[tr].mean(0), X[tr].std(0) + 1e-8
+    A = np.c_[(X - mu) / sd, np.ones(len(X))]
+    W = np.linalg.solve(A[tr].T @ A[tr] + lam * len(tr) * np.eye(A.shape[1]), A[tr].T @ Y[tr])
+    res = ((Y[te] - A[te] @ W) ** 2).sum(); tot = ((Y[te] - Y[te].mean(0)) ** 2).sum()
+    return float(1 - res / tot)
+
+
 def ridge_r2(X, Y, lam=1e-2, train_frac=0.7, seed=0):
     rng = np.random.default_rng(seed)
     idx = rng.permutation(len(X))
@@ -113,8 +125,7 @@ def main():
         r_el = ridge_r2(X, S[:, :4]).mean()            # element one-hot, mean over the four classes
         r_nb = ridge_r2(X, S[:, 4:5])[0]               # neighbour count
         # static fraction: variance of the features explained by the static descriptors
-        r_feat = ridge_r2(S, X, lam=1e-6)
-        wvar = X.var(0); static_frac = float((r_feat * wvar).sum() / wvar.sum())
+        static_frac = pooled_r2(S, X)
         for n, r in (("static: element (mean over 4 classes)", r_el), ("static: bonded neighbour count", r_nb),
                      ("static fraction of the feature vector", static_frac)):
             rows.append({"encoder": label, "target": n, "r2": float(r)})

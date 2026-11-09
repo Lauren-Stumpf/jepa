@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# Run one metatrain training to completion, resuming from its own latest checkpoint
-# whenever it is interrupted (crash, killed process, node reboot followed by launch_all.sh).
+# Run one metatrain training to completion. If it is interrupted (crash, killed process,
+# node reboot followed by launch_all.sh) it is started AGAIN FROM SCRATCH: metatrain's
+# FlashMD trainer, when restarted from a checkpoint, trains num_epochs MORE epochs on a
+# learning-rate curve that no longer matches, and a restarted fine-tune also loses its
+# optimiser state, so a resumed run would not be comparable with an uninterrupted one.
 #   bash scripts/train_supervisor.sh <name> <config.yaml> <gpu index>
 # Each run lives in results/runs/<name>/ so its checkpoints (outputs/<date>/<time>/*.ckpt)
 # cannot be confused with another run's. Finished when results/runs/<name>/model.pt exists.
@@ -17,14 +20,13 @@ export CUDA_VISIBLE_DEVICES=$GPU
 echo "$GPU" > gpu
 fails=0
 while [ ! -f model.pt ]; do
-  ckpt=$(ls -t outputs/*/*/*.ckpt 2>/dev/null | head -1)
-  if [ -n "$ckpt" ]; then
-    echo "$(date '+%F %T') resuming $NAME from $ckpt on GPU $GPU" | tee -a supervisor.log
-    mtt train options.yaml -o model.pt --restart "$ckpt" >> train.log 2>&1
-  else
-    echo "$(date '+%F %T') starting $NAME on GPU $GPU" | tee -a supervisor.log
-    mtt train options.yaml -o model.pt >> train.log 2>&1
+  if [ -d outputs ]; then
+    echo "$(date '+%F %T') $NAME was interrupted; starting again from scratch (previous outputs moved aside)" | tee -a supervisor.log
+    mv outputs "outputs_interrupted_$(date '+%Y%m%d_%H%M%S')"
+    mv train.log "train_interrupted_$(date '+%Y%m%d_%H%M%S').log" 2>/dev/null
   fi
+  echo "$(date '+%F %T') starting $NAME on GPU $GPU" | tee -a supervisor.log
+  mtt train options.yaml -o model.pt >> train.log 2>&1
   status=$?
   if [ ! -f model.pt ]; then
     fails=$((fails + 1))

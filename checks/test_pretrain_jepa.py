@@ -129,6 +129,11 @@ def test_relative_loss():
     z_now = torch.randn(50, 16); z_fut = z_now + 0.01 * torch.randn(50, 16)
     loss, parts = jepa_loss(z_now, z_fut, pred, 1.0, 0.0, 0.0, relative=True)
     assert abs(loss.item() - 1.0) < 1e-4, loss.item()       # copying scores exactly 1
+    assert abs(parts["inv_ratio"] - 1.0) < 1e-4              # and the logged ratio says so (not divided twice)
+    # the denominator is not detached: shrinking the change must not lower the loss by itself
+    z_now2 = z_now.clone().requires_grad_(True); z_fut2 = (z_now2 + 0.01 * torch.randn(50, 16)).detach()
+    loss2, _ = jepa_loss(z_now2, z_fut2 + 0 * z_now2, pred, 1.0, 0.0, 0.0, relative=True)
+    assert loss2.requires_grad
     half = lambda z: z + 0.5 * (z_fut - z)                  # a predictor that explains half the change
     inv = torch.nn.functional.mse_loss(half(z_now), z_fut) / torch.nn.functional.mse_loss(z_now, z_fut)
     assert abs(inv.item() - 0.25) < 1e-6                    # half the change left -> a quarter of the squared error

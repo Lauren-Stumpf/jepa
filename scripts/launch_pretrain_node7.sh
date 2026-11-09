@@ -15,7 +15,7 @@ ARMS=("jepa_pretrain_plain_organic8|--predictor plain"
 for k in 0 1 2 3; do
   name=${ARMS[$k]%%|*}; extra=${ARMS[$k]#*|}; gpu=${GPUS[$k]}
   if [ -f "results/runs/$name/manifest.json" ]; then echo "$name: finished"; continue; fi
-  if tmux has-session -t "train_$name" 2>/dev/null; then echo "$name: already running"; continue; fi
+  if tmux has-session -t "=train_$name" 2>/dev/null; then echo "$name: already running"; continue; fi
   tmux new-session -d -s "train_$name" "bash $REPO/scripts/pretrain_supervisor.sh $name $gpu $extra"
   echo "$name: started on GPU $gpu ($extra)"
 done

@@ -30,7 +30,7 @@ architecture:
     log_interval: 1
     checkpoint_interval: 1   # keep every epoch; selection with the energy criterion is done afterwards
     finetune:
-      read_from: results/runs/jepa_pretrain_normtarget_organic8/pretrained.ckpt   # normalise-both-sides predictor (standard design)
+      read_from: /storage3/lauren/code/jepa/results/runs/jepa_pretrain_normtarget_organic8/pretrained.ckpt   # normalise-both-sides predictor (standard design)
       method: full            # every weight trains, same as the baseline
     loss:
       position: {type: mse, weight: 1.0, reduction: mean}

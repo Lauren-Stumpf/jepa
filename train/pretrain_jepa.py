@@ -243,7 +243,7 @@ def term_pulls(z_now, z_fut, pred, model, w_inv, w_var, w_cov, relative=False):
     z_hat = pred(z_now)
     inv = torch.nn.functional.mse_loss(z_hat, z_fut)
     if relative:
-        inv = inv / torch.nn.functional.mse_loss(z_now, z_fut).detach().clamp(min=1e-12)
+        inv = inv / torch.nn.functional.mse_loss(z_now, z_fut).clamp(min=1e-12)
     inv = w_inv * inv
     v1, c1, _ = vicreg_terms(z_now)
     v2, c2, _ = vicreg_terms(z_fut)
@@ -266,22 +266,25 @@ def term_pulls(z_now, z_fut, pred, model, w_inv, w_var, w_cov, relative=False):
 def jepa_loss(z_now, z_fut, pred, w_inv, w_var, w_cov, relative=False):
     z_hat = pred(z_now)
     inv = torch.nn.functional.mse_loss(z_hat, z_fut)
+    trivial = torch.nn.functional.mse_loss(z_now, z_fut)   # the error of plain copying
     if relative:
-        # prediction error measured against the size of the actual change (the error of plain
-        # copying), so copying scores 1 and explaining half the change scores 0.5, whatever the
-        # absolute size of the change; the mean-squared difference is kept as the gradient
-        # carrier so the batch's copying error enters as a scale, not as something to shrink
-        inv = inv / torch.nn.functional.mse_loss(z_now, z_fut).detach().clamp(min=1e-12)
+        # prediction error measured against the size of the actual change, so copying scores 1
+        # and explaining half the change scores 0.25 whatever the absolute size of the change.
+        # The denominator is NOT detached: detaching it gives the encoder a direct incentive to
+        # make the two frames identical (delete everything that changes in time), growing as
+        # the change shrinks (independent review, 9 Nov). Undetached, the ratio is scale-free
+        # and the only way to lower it is to make the change predictable.
+        inv = inv / trivial.clamp(min=1e-12)
     v1, c1, d1 = vicreg_terms(z_now)
     v2, c2, _ = vicreg_terms(z_fut)
     var = 0.5 * (v1 + v2)
     cov = 0.5 * (c1 + c2)
     total = w_inv * inv + w_var * var + w_cov * cov
-    # the trivial prediction "future feature = current feature"; the ratio inv/trivial is
-    # the headline diagnostic: near 1 means the predictor has learned nothing about motion
-    trivial = torch.nn.functional.mse_loss(z_now, z_fut).detach()
+    # the ratio to the trivial prediction "future feature = current feature" is the headline
+    # diagnostic: near 1 means the predictor has learned nothing about motion
+    ratio = inv if relative else inv / trivial.detach().clamp(min=1e-12)
     return total, {"inv": inv.item(), "var": var.item(), "cov": cov.item(), "trivial_inv": trivial.item(),
-                   "inv_ratio": (inv / trivial.clamp(min=1e-12)).item(),
+                   "inv_ratio": ratio.item(),
                    "std_now": d1["std"], "std_min": d1["std_min"], "dead_frac": d1["dead_frac"], "eff_rank": d1["eff_rank"]}
 
 
@@ -403,11 +406,11 @@ def main():
             z_fut = encode(model, fut)
             e_now, e_fut = embed(proj(z_now)), embed(proj(z_fut))
             loss, parts = jepa_loss(e_now, e_fut, pred, args.w_inv, args.w_var, args.w_cov, args.relative_loss)
-            if b % 200 == 0:
-                if args.projector_dim > 0:   # the encoder's own features, as well as the loss space
-                    _, _, de = vicreg_terms(z_now.detach())
-                    parts.update({"enc_rank": de["eff_rank"], "enc_dead": de["dead_frac"]})
-                if args.pull_every and b % args.pull_every == 0:
+            if b % 200 == 0 and args.projector_dim > 0:   # the encoder's own features, as well as the loss space
+                _, _, de = vicreg_terms(z_now.detach())
+                parts.update({"enc_rank": de["eff_rank"], "enc_dead": de["dead_frac"]})
+            if args.pull_every and b % args.pull_every == 0:
+                if True:
                     pulls = term_pulls(e_now, e_fut, pred, model, args.w_inv, args.w_var, args.w_cov, args.relative_loss)
                     parts.update(pulls)
                     pull_log.append({"epoch": epoch, "step": b, **pulls})

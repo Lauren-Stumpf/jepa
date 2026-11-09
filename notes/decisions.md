@@ -404,3 +404,29 @@ rather than to the scale of the embedding; no stride- or dataset-specific
 weight retuning. The three running arms are kept as the controls that document
 the problem. Weight retuning for a next round is to be done from the logged
 pulls of all four arms, not by hand tonight.
+
+## 2026-11-09 (night): second review of the day's changes, four fixes
+
+1. Fine-tune configs pointed to the pretrained checkpoint by a relative path,
+   but each run works from its own folder; every fine-tune would have failed to
+   start. Paths are now absolute. (No fine-tune had started.)
+2. Resuming from a checkpoint is not used any more: metatrain's FlashMD trainer,
+   restarted from a checkpoint, trains num_epochs MORE epochs on a learning-rate
+   curve that no longer matches, and a restarted fine-tune loses its optimiser
+   state. An interrupted run is started again from scratch (previous outputs
+   moved aside). Result tables must report the run's final epoch.
+3. The relative prediction loss had its denominator detached from the gradient.
+   The review showed with a toy model that this gives the encoder a direct
+   incentive to make the two frames' embeddings identical (delete everything
+   that changes in time), growing as the change shrinks; the undetached ratio
+   is scale-free and can only be lowered by making the change predictable. The
+   residrel arm is restarted with the undetached version.
+4. The logged inv/trivial for the relative-loss arm was divided twice.
+Also: exact tmux session matching (prefix matching could have made the launcher
+skip restarting the 100-epoch baseline while the 300-epoch one was alive); the
+training-set path is read from the training_set block; the probe's static
+fraction uses a pooled R^2 (robust to near-constant feature dimensions).
+To state with the results: the three fine-tune seeds per arm share one
+pretraining seed, so their spread understates the pretrained arm's variance;
+and residrel differs from resid by an effective prediction weight of
+25/trivial, which is thousands of times larger, under gradient clipping at 1.
