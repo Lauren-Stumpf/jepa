@@ -18,6 +18,7 @@ cp "$REPO/$CFG" options.yaml
 source "$REPO/env_train.sh"
 export CUDA_VISIBLE_DEVICES=$GPU
 echo "$GPU" > gpu
+hostname -s > host   # which node runs this, so the launcher on the other node leaves it alone
 fails=0
 while [ ! -f model.pt ]; do
   if [ -d outputs ]; then

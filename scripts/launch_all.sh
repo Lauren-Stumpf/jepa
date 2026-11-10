@@ -63,6 +63,11 @@ while read -r name cfg; do
     ckpt=$(grep -m1 "read_from: /storage3" "$cfg" | awk '{print $2}')
   fi
   if [ -f "$done_file" ]; then echo "  $name: finished"; continue; fi
+  # alive on the OTHER node: its supervisor recorded that node, and its log moved in the last 30 min
+  h=$(cat "results/runs/$name/host" 2>/dev/null)
+  if [ -n "$h" ] && [ "$h" != "$(hostname -s)" ] && [ -n "$(find "results/runs/$name" -maxdepth 1 -name 'train.log' -mmin -30 2>/dev/null)" ]; then
+    echo "  $name: running on $h, left alone"; continue
+  fi
   if tmux has-session -t "=train_$name" 2>/dev/null; then echo "  $name: already running"; continue; fi
   if [ "$is_pretrain" = 0 ]; then
     if [ ! -s "$train_file" ]; then echo "  $name: no training data yet ($train_file), skipped"; continue; fi

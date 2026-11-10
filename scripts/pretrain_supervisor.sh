@@ -13,6 +13,7 @@ cd "$REPO"
 source env_train.sh
 export CUDA_VISIBLE_DEVICES=$GPU
 echo "$GPU" > "$RUN/gpu"
+hostname -s > "$RUN/host"   # which node runs this
 fails=0
 while [ ! -f "$RUN/manifest.json" ]; do
   echo "$(date '+%F %T') starting/resuming $NAME on GPU $GPU" | tee -a "$RUN/supervisor.log"
