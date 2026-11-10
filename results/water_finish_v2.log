@@ -1,0 +1,45 @@
+
+=== 0. all 280 runs present and complete
+all 280 runs complete
+
+=== 1. the seven checks on every run (about a minute per run; SKIP_RUN_CHECKS=1 to skip if already done)
+all runs pass
+
+=== 1b. run-mean temperatures across all runs (centre, spread, outliers)
+280 runs: mean of run-mean temperatures 301.0 K (standard error 0.7 K), spread 11.0 K (estimate 12.5 K)
+most extreme runs: run_033 266.0 K (z = -3.2), run_255 269.9 K (z = -2.8), run_126 330.6 K (z = +2.7), run_175 271.6 K (z = -2.7), run_197 273.4 K (z = -2.5)
+[PASS] centred on 300 K: 301.0 K
+[PASS] spread of run means: 11.0 K vs estimate 12.5 K
+[PASS] run-averaged temperature flat in time (equilibrated starts): last quarter minus first quarter +0.54 +- 0.44 K
+[PASS] no outlier beyond chance: largest |z| 3.2, typical largest for 280 runs 3.4
+ALL PASS
+
+=== 2. parse into pairs at 1, 4 and 16 fs
+280 complete runs; 0 incomplete or missing, skipped: []
+split by run: {'train': 224, 'val': 28, 'test': 28}
+  20 runs parsed
+  40 runs parsed
+  60 runs parsed
+  80 runs parsed
+  100 runs parsed
+  120 runs parsed
+  140 runs parsed
+  160 runs parsed
+  180 runs parsed
+  200 runs parsed
+  220 runs parsed
+  240 runs parsed
+  260 runs parsed
+  280 runs parsed
+stride 1 fs (momentum change target): {'train': 8960, 'val': 1120, 'test': 1120} pairs (40 per run), largest raw displacement 0.086 A -> data/water/pairs/1fs
+stride 4 fs (momentum target): {'train': 8960, 'val': 1120, 'test': 1120} pairs (40 per run), largest raw displacement 0.333 A -> data/water/pairs/4fs
+stride 16 fs (momentum target): {'train': 8960, 'val': 1120, 'test': 1120} pairs (40 per run), largest raw displacement 1.012 A -> data/water/pairs/16fs
+
+=== 3. check the pairs against the raw trajectories
+all pairs checks pass
+
+=== done: commit the manifests, then launch the water baselines (one GPU each; check nvidia-smi first; source env_train.sh):
+  git add data/water/pairs/*/manifest.json && git commit -m 'water pairs prepared' && git push
+  CUDA_VISIBLE_DEVICES=1 mtt train configs/flashmd_water16_scratch.yaml -o results/models/flashmd_water16_scratch.pt
+  CUDA_VISIBLE_DEVICES=2 mtt train configs/flashmd_water4_scratch.yaml  -o results/models/flashmd_water4_scratch.pt
+  CUDA_VISIBLE_DEVICES=3 mtt train configs/flashmd_water1_scratch.yaml  -o results/models/flashmd_water1_scratch.pt
