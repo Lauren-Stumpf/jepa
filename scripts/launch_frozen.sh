@@ -56,6 +56,21 @@ running() {
   local h; h=$(cat "results/runs/$1/host" 2>/dev/null)
   [ -n "$h" ] && [ "$h" != "$(hostname -s)" ] && [ -n "$(find "results/runs/$1" -maxdepth 1 -name 'train.log' -mmin -30 2>/dev/null)" ]
 }
+# A claim visible to both nodes (mkdir is atomic on the shared filesystem), so launchers on two
+# nodes cannot start the same run in the same moment. A claim by THIS node may be reused (a
+# reboot here); another node's claim is honoured unless the run looks dead (neither its
+# train.log nor the claim changed for 30 min).
+claim() {
+  local c="results/runs/$1/.launch_claim"
+  mkdir -p "results/runs/$1"
+  if mkdir "$c" 2>/dev/null; then hostname -s > "$c/host"; return 0; fi
+  [ "$(cat "$c/host" 2>/dev/null)" = "$(hostname -s)" ] && { touch "$c"; return 0; }
+  if [ -z "$(find "results/runs/$1" -maxdepth 1 \( -name train.log -o -name .launch_claim \) -mmin -30 2>/dev/null)" ]; then
+    # take over a dead claim atomically: only one node's rename can succeed
+    mv "$c" "$c.stale.$(hostname -s).$$" 2>/dev/null && mkdir "$c" 2>/dev/null && { hostname -s > "$c/host"; return 0; }
+  fi
+  return 1
+}
 start() {  # $1 = run name, $2 = runs allowed per GPU, $3 = command (GPU is replaced by the index)
   # pick, launch and wait for the run to allocate memory under one lock on this node's own disk,
   # so two launchers never choose the same GPU in the same moment
@@ -63,13 +78,18 @@ start() {  # $1 = run name, $2 = runs allowed per GPU, $3 = command (GPU is repl
   for attempt in $(seq 1 144); do
     gpu=$( (
       flock 9
+      # re-check under the lock: while this launcher waited, the run may have been started
+      # here or by a launcher on another node (or finished)
+      if running "$1" || [ -f "results/runs/$1/model.pt" ] || [ -f "results/runs/$1/manifest.json" ]; then echo SKIP; exit 0; fi
       g=$(pick_gpu "$2")
       if [ -n "$g" ]; then
+        claim "$1" || { echo SKIP; exit 0; }
         tmux new-session -d -s "train_$1" "${3//GPU/$g}"
         sleep 90
       fi
       echo "$g"
     ) 9>/tmp/jepa_gpu_pick.lock )
+    [ "$gpu" = SKIP ] && { echo "  $1: started elsewhere or finished while waiting, skipped"; return; }
     [ -n "$gpu" ] && break
     echo "  $1: no GPU with room, waiting 10 min"; sleep 600
   done
