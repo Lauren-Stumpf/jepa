@@ -35,7 +35,7 @@ fi
 # Our runs on each GPU, recounted on every call from the gpu files of live sessions (another
 # launcher may have placed runs meanwhile). A pretraining fills its card. Sharing also needs
 # SHARE_FREE_MB of free memory, because a run that is still loading data uses none yet.
-SHARE_FREE_MB=${SHARE_FREE_MB:-7000}
+SHARE_FREE_MB=${SHARE_FREE_MB:-30000}   # a water fine-tune (16 frames x 192 atoms) uses about 28 GB: never share a 46 GB card, never fit a 24 GB one
 count_ours() {
   local f n g k out=""
   for f in results/runs/*/gpu; do
