@@ -149,6 +149,7 @@ def make_batch(frames, model, dtype, device, augment, shared_rotation=True):
 # ------------------------------------------------------------------------------ model
 
 FEATURE_OUTPUT = {"feature": ModelOutput(sample_kind="atom")}
+VAL_SHUFFLE_SEED = 12345   # fixed order of validation pairs, shared by all runs
 
 
 def encode(model, systems):
@@ -337,6 +338,13 @@ def main():
     t0 = time.time()
     train = PairData(args.train, masses, args.max_frames)
     val = PairData(args.val, masses, args.max_frames)
+    # The validation file is grouped by molecule (or water run), so batches taken in file
+    # order hold one molecule each, and the per-batch diagnostics (variance, covariance,
+    # effective rank, dead fraction) then measure spread within one molecule, not across
+    # atoms in general as the shuffled training batches do. Shuffle once with a FIXED seed
+    # (independent of --seed): every epoch, variant and seed then sees the same mixed batches.
+    val_order = np.random.default_rng(VAL_SHUFFLE_SEED).permutation(len(val.frames))
+    val.frames = [val.frames[i] for i in val_order]
     print(f"read {len(train)} training and {len(val)} validation pairs in {time.time() - t0:.0f} s", flush=True)
 
     with torch.no_grad():
@@ -472,7 +480,8 @@ def main():
 
     with open(os.path.join(args.out, "manifest.json"), "w") as f:
         json.dump({"args": vars(args), "predictor_variant": variant, "feature_dim": d, "train_pairs": len(train), "val_pairs": len(val),
-                   "masses": masses, "timestep_fs": timestep, "model_hypers": model_hypers}, f, indent=1)
+                   "masses": masses, "timestep_fs": timestep, "model_hypers": model_hypers,
+                   "val_shuffle_seed": VAL_SHUFFLE_SEED}, f, indent=1)
     print("done:", os.path.join(args.out, "pretrained.ckpt"))
     if run is not None:
         run.finish()

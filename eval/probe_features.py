@@ -122,11 +122,14 @@ def main():
         for n, r in zip(dyn_names, ridge_r2(X, Y)):
             rows.append({"encoder": label, "target": n, "r2": float(r)})
             print(f"{label:10s} {n:55s} R^2 = {r:.3f}")
-        r_el = ridge_r2(X, S[:, :4]).mean()            # element one-hot, mean over the four classes
+        # element one-hot, mean over the classes present (water has no C or N: an all-zero
+        # column has no variance and its R^2 is undefined, so it is left out)
+        present = S[:, :4].std(0) > 0
+        r_el = ridge_r2(X, S[:, :4][:, present]).mean()
         r_nb = ridge_r2(X, S[:, 4:5])[0]               # neighbour count
         # static fraction: variance of the features explained by the static descriptors
         static_frac = pooled_r2(S, X)
-        for n, r in (("static: element (mean over 4 classes)", r_el), ("static: bonded neighbour count", r_nb),
+        for n, r in (("static: element (mean over the classes present)", r_el), ("static: bonded neighbour count", r_nb),
                      ("static fraction of the feature vector", static_frac)):
             rows.append({"encoder": label, "target": n, "r2": float(r)})
             print(f"{label:10s} {n:55s} R^2 = {r:.3f}")

@@ -98,3 +98,7 @@ while read -r name cfg; do
   echo "  $name: started on GPU $gpu (tmux session train_$name)"
   sleep 60   # let it allocate GPU memory before the next one looks for a free GPU
 done <<< "$RUNS"
+
+# the frozen-encoder experiment and the water 16 fs experiment have their own launchers
+bash "$REPO/scripts/launch_frozen.sh"
+bash "$REPO/scripts/launch_water16.sh"
