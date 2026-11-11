@@ -485,3 +485,36 @@ water 10% gives 5,600 optimiser steps in 100 epochs against about 52,000 for org
 
 All new code was reviewed by two independent agents before running; fixes in commits
 0fab73f and ea2fa62 (branch frozen-water-experiments).
+
+## 2026-11-11 (evening): first results of the freezing experiment, recomputed diagnostics
+
+Freezing (10% organic, validation, epoch 100; momentum | position):
+  A frozen 100 epochs, random encoder     0.2486          (heads alone barely learn)
+  A frozen 100 epochs, plain encoder      0.2525
+  B heads first, random (3 seeds)         0.0245 +/- 0.0009 | 0.0107   (training 0.0187)
+  B heads first, plain (3 seeds)          0.0268 +/- 0.0004 | 0.0115   (training 0.0159)
+  C everything from step 1 (earlier)      random 0.0238 | plain 0.0245
+Reading: protecting the encoder does not rescue pretraining; under heads-first the plain
+arm is 9.5% worse than the random arm (four times the decision threshold), fits the
+training molecules better and new molecules worse. With the encoder frozen throughout,
+the heads cannot learn the task from either encoder, so the pretrained features are no
+more usable by the heads than random ones.
+Relative-loss fine-tunes (current procedure): 0.0246, 0.0249, 0.0254, about 5% worse than baseline.
+
+Recomputed validation diagnostics with shuffled batches (eval/recompute_val_diagnostics.py):
+the logged validation ranks (36 to 83) were an artefact of one-molecule batches; shuffled
+ranks are 250 to 437 (projector encoder 40). The relative-loss variant's predictor explains
+96% of the feature change on validation molecules too (error / copying 0.036 shuffled, 0.31
+in file order): the earlier "it memorises training molecules" reading was wrong, and so was
+the statement that prediction-error ratios are unaffected by batch makeup (they are a ratio
+of per-batch means).
+
+Feature change on water (eval/feature_change_vs_jump.py, change / spread across atoms):
+untrained encoder 0.4% at 1 fs, 9.5% at 8 fs, 19% at 16 fs, 43% at 64 fs; trained water
+baseline encoder 35% at 4 fs, 71% at 16 fs. So the near-zero change seen in organic
+pretraining (copying error about 0.4%) is produced by the pretraining itself, not a
+property of 8 fs dynamics.
+
+Water fine-tunes use about 28 GB at batch 16: they ran out of memory on torrnode7's 24 GB
+cards (two runs moved to results/runs_invalid/*_oom_torrnode7_20261111) and run on A40s on
+torrnode15 and torrnode12. Launchers now claim a run atomically on the shared filesystem.
