@@ -25,6 +25,7 @@ while [ ! -f model.pt ]; do
     echo "$(date '+%F %T') $NAME was interrupted; starting again from scratch (previous outputs moved aside)" | tee -a supervisor.log
     mv outputs "outputs_interrupted_$(date '+%Y%m%d_%H%M%S')"
     mv train.log "train_interrupted_$(date '+%Y%m%d_%H%M%S').log" 2>/dev/null
+    for c in model.ckpt model_last.ckpt; do [ -f "$c" ] && mv "$c" "${c%.ckpt}_interrupted_$(date '+%Y%m%d_%H%M%S').ckpt"; done
   fi
   echo "$(date '+%F %T') starting $NAME on GPU $GPU" | tee -a supervisor.log
   mtt train options.yaml -o model.pt >> train.log 2>&1

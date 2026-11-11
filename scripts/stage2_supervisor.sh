@@ -7,8 +7,10 @@ set -uo pipefail
 S1=${1:?stage 1 name}; S2=${2:?stage 2 name}; GPU=${3:?gpu index}
 REPO=/storage3/lauren/code/jepa
 cd "$REPO"
+mkdir -p "results/runs/$S2" && echo "$GPU" > "results/runs/$S2/gpu"   # count this GPU as ours from the start
 [ -f "results/runs/$S1/model.pt" ] || { echo "stage 1 ($S1) has not finished"; exit 1; }
-if [ ! -f "results/runs/$S1/model_last.ckpt" ]; then
+# (re)build when missing or older than stage 1's checkpoint (stage 1 rerun)
+if [ ! -f "results/runs/$S1/model_last.ckpt" ] || [ "results/runs/$S1/model.ckpt" -nt "results/runs/$S1/model_last.ckpt" ]; then
   ( source env_train.sh && python train/last_epoch_checkpoint.py "results/runs/$S1/model.ckpt" \
       "results/runs/$S1/model_last.ckpt" ) >> "results/runs/$S1/supervisor.log" 2>&1 \
     || { echo "could not write results/runs/$S1/model_last.ckpt" | tee -a "results/runs/$S1/supervisor.log"; exit 1; }

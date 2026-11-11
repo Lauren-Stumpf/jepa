@@ -18,6 +18,7 @@ masses are read from the config to undo the scaling).
   python data/water/make_water_subset.py data/water/pairs/16fs/train.xyz 10 \
       data/water/pairs/16fs/train_10pct.xyz configs/flashmd_water16_scratch.yaml
 """
+import os
 import sys
 
 import ase.io
@@ -34,6 +35,7 @@ for fwd, rev in zip(kept[0::2], kept[1::2]):
     fwd_future = fwd.get_positions() + (fwd.arrays["future_positions"] - fwd.get_positions()) / sm
     worst = max(worst, float(np.abs(rev.get_positions() - fwd_future).max()))
 assert worst < 1e-6, f"a kept couple is not (forward, reversed): largest mismatch {worst:.2e} A"
-ase.io.write(dst, kept, format="extxyz")
+ase.io.write(dst + ".tmp", kept, format="extxyz")
+os.replace(dst + ".tmp", dst)
 print(f"{len(kept)} frames ({len(kept) // 2} forward pairs, each with its time-reversed copy; every {every}th pair); "
       f"couple check passed (largest mismatch {worst:.1e} A) -> {dst}")

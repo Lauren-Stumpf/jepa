@@ -116,14 +116,25 @@ def main():
     for name, kind, path in encoders:
         model = load_encoder(kind, path, hypers, info, masses, timestep, device)
         h0 = features(model, starts, device)
+        types = [t.numpy() for t, _, _, _ in starts]
         spread = float(np.mean([((h - h.mean(0)) ** 2).sum(1).mean() for h in h0]))
-        row = {}
+        # per element: change of that element's atoms over the spread among atoms of the SAME
+        # element (the all-atom spread is mostly the oxygen/hydrogen difference, which makes
+        # the all-atom ratio look small)
+        elements = sorted(set(np.concatenate(types).tolist()))
+        spread_el = {z: float(np.mean([((h[t == z] - h[t == z].mean(0)) ** 2).sum(1).mean() for h, t in zip(h0, types)]))
+                     for z in elements}
+        row, row_el = {}, {str(z): {} for z in elements}
         for g in GAPS_FS:
             h1 = features(model, later[g], device)
-            change = float(np.mean([((b - a) ** 2).sum(1).mean() for a, b in zip(h0, h1)]))
-            row[str(g)] = change / spread
-        res["encoders"][name] = {"path": path, "relative_change": row}
-        print(f"{name:12s} " + "  ".join(f"{g} fs: {row[str(g)]:.4f}" for g in GAPS_FS), flush=True)
+            d2 = [((b - a) ** 2).sum(1) for a, b in zip(h0, h1)]
+            row[str(g)] = float(np.mean([d.mean() for d in d2])) / spread
+            for z in elements:
+                row_el[str(z)][str(g)] = float(np.mean([d[t == z].mean() for d, t in zip(d2, types)])) / spread_el[z]
+        res["encoders"][name] = {"path": path, "relative_change": row, "relative_change_by_element": row_el}
+        print(f"{name:12s} all atoms  " + "  ".join(f"{g} fs: {row[str(g)]:.4f}" for g in GAPS_FS), flush=True)
+        for z in elements:
+            print(f"{'':12s} element {z:2d} " + "  ".join(f"{g} fs: {row_el[str(z)][str(g)]:.4f}" for g in GAPS_FS), flush=True)
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     json.dump(res, open(args.out, "w"), indent=1)
 

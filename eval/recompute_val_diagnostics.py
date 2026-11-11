@@ -59,7 +59,8 @@ def main():
     args = ap.parse_args()
     man = json.load(open(os.path.join(args.run_dir, "manifest.json")))
     a = man["args"]
-    variant = man.get("predictor_variant", "norm_input")   # runs before 9 Nov evening did not record it
+    # runs before 9 Nov evening did not record the variant: residual if launched with --residual_predictor, else norm_input
+    variant = man.get("predictor_variant") or ("residual" if a.get("residual_predictor") else "norm_input")
     logged_order = "shuffled" if "val_shuffle_seed" in man else "file_order"
     device = "cuda" if torch.cuda.is_available() else "cpu"
     dtype = torch.float32
@@ -73,11 +74,11 @@ def main():
         additive.to(dtype=torch.float64)
     model.scaler.to(dtype=torch.float64)
     d = man["feature_dim"]
-    if a["projector_dim"] > 0:
+    if a.get("projector_dim", 0) > 0:
         proj = Projector(d, a["projector_dim"]); d_loss = a["projector_dim"]
     else:
         proj = torch.nn.Identity(); d_loss = d
-    proj.load_state_dict(state["proj"])
+    proj.load_state_dict(state.get("proj", {}))
     pred = Predictor(d_loss, a["pred_hidden"], variant=variant)
     pred.load_state_dict(state["pred"])
     proj, pred = proj.to(device=device, dtype=dtype), pred.to(device=device, dtype=dtype)
@@ -95,10 +96,10 @@ def main():
            "shuffled": evaluate(shuffled, model, pred, proj, embed, a, dtype, device)}
     hist = json.load(open(os.path.join(args.run_dir, "history.json")))
     res["logged_last_epoch"] = {k[4:]: v for k, v in hist[-1].items() if k.startswith("val_")}
+    res["logged_order"] = logged_order
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     json.dump(res, open(args.out, "w"), indent=1)
     keys = ["inv_ratio", "var", "cov", "std_min", "dead_frac", "eff_rank", "enc_rank", "enc_dead"]
-    res["logged_order"] = logged_order
     print(f"{res['run']} ({variant}), state from epoch {res['epoch_of_state']}; the run logged its validation "
           f"diagnostics in {logged_order.replace('_', ' ')}, so that column should match 'logged'")
     print(f"{'diagnostic':12s} {'logged':>10s} {'file order':>11s} {'shuffled':>10s}")

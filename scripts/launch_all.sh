@@ -104,6 +104,7 @@ done <<< "$RUNS"
 # script nor the other launcher; flock stops two copies of one launcher running at once)
 for l in launch_frozen launch_water16; do
   tmux has-session -t "=$l" 2>/dev/null && { echo "  $l: already running"; continue; }
-  tmux new-session -d -s "$l" "flock -n $REPO/results/.$l.lock bash $REPO/scripts/$l.sh >> $REPO/results/$l.log 2>&1"
+  # the lock lives on this node's own disk (/storage3 is shared between nodes)
+  tmux new-session -d -s "$l" "flock -n -E 75 /tmp/jepa_$l.lock bash $REPO/scripts/$l.sh >> $REPO/results/$l.log 2>&1 || [ \$? -ne 75 ] || echo \"\$(date '+%F %T') $l already running on this node\" >> $REPO/results/$l.log"
   echo "  $l: started (log results/$l.log)"
 done

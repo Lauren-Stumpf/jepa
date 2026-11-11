@@ -26,22 +26,28 @@ for s in $SEEDS_B; do
   fi
 done
 
-# GPUs already used by our own running supervisors (same accounting as launch_all.sh)
-ours=""
-for f in results/runs/*/gpu; do
-  [ -f "$f" ] || continue
-  n=$(basename "$(dirname "$f")")
-  tmux has-session -t "=train_$n" 2>/dev/null || continue
-  g=$(cat "$f")
-  case "$n" in jepa_pretrain_*) for k in $(seq 1 "$RUNS_PER_GPU"); do ours="$ours $g"; done ;; *) ours="$ours $g" ;; esac
-done
-pick_gpu() {
-  nvidia-smi --query-gpu=index,memory.used --format=csv,noheader,nounits |
-    awk -F', ' -v lim="$FREE_MB" -v ours="$ours" -v per="$RUNS_PER_GPU" '
+# Our runs on each GPU, recounted on every call from the gpu files of live sessions (another
+# launcher may have placed runs meanwhile). A pretraining fills its card. Sharing also needs
+# SHARE_FREE_MB of free memory, because a run that is still loading data uses none yet.
+SHARE_FREE_MB=${SHARE_FREE_MB:-7000}
+count_ours() {
+  local f n g k out=""
+  for f in results/runs/*/gpu; do
+    [ -f "$f" ] || continue
+    n=$(basename "$(dirname "$f")")
+    tmux has-session -t "=train_$n" 2>/dev/null || continue
+    g=$(cat "$f")
+    case "$n" in jepa_pretrain_*) for k in $(seq 1 "$RUNS_PER_GPU"); do out="$out $g"; done ;; *) out="$out $g" ;; esac
+  done
+  echo "$out"
+}
+pick_gpu() {  # $1 = how many of our runs may share the GPU (1 = needs an empty GPU)
+  nvidia-smi --query-gpu=index,memory.used,memory.total --format=csv,noheader,nounits |
+    awk -F', ' -v lim="$FREE_MB" -v ours="$(count_ours)" -v per="$1" -v need="$SHARE_FREE_MB" '
       BEGIN { n = split(ours, a, " "); for (i = 1; i <= n; i++) if (a[i] != "") cnt[a[i]]++ }
       { g = $1; c = (g in cnt) ? cnt[g] : 0
         if ($2 < lim && c == 0) { print g; exit }
-        if (c > 0 && c < per) { print g; exit } }'
+        if (per > 1 && c > 0 && c < per && $3 - $2 > need) { print g; exit } }'
 }
 # alive here (tmux session), or alive on the OTHER node: its supervisor recorded that node and
 # its log moved in the last 30 min (same rule as launch_all.sh)
@@ -50,14 +56,25 @@ running() {
   local h; h=$(cat "results/runs/$1/host" 2>/dev/null)
   [ -n "$h" ] && [ "$h" != "$(hostname -s)" ] && [ -n "$(find "results/runs/$1" -maxdepth 1 -name 'train.log' -mmin -30 2>/dev/null)" ]
 }
-start() {  # $1 = session/run name, $2 = command
-  local gpu=""
-  for attempt in $(seq 1 144); do gpu=$(pick_gpu); [ -n "$gpu" ] && break; echo "  $1: no GPU with room, waiting 10 min"; sleep 600; done
+start() {  # $1 = run name, $2 = runs allowed per GPU, $3 = command (GPU is replaced by the index)
+  # pick, launch and wait for the run to allocate memory under one lock on this node's own disk,
+  # so two launchers never choose the same GPU in the same moment
+  local gpu="" attempt
+  for attempt in $(seq 1 144); do
+    gpu=$( (
+      flock 9
+      g=$(pick_gpu "$2")
+      if [ -n "$g" ]; then
+        tmux new-session -d -s "train_$1" "${3//GPU/$g}"
+        sleep 90
+      fi
+      echo "$g"
+    ) 9>/tmp/jepa_gpu_pick.lock )
+    [ -n "$gpu" ] && break
+    echo "  $1: no GPU with room, waiting 10 min"; sleep 600
+  done
   [ -z "$gpu" ] && { echo "  $1: no GPU after 24 h, skipped"; return; }
-  ours="$ours $gpu"
-  tmux new-session -d -s "train_$1" "${2//GPU/$gpu}"
   echo "  $1: started on GPU $gpu"
-  sleep 60
 }
 
 echo "$(date '+%F %T') launch_frozen"
@@ -65,7 +82,7 @@ for start_enc in random plain; do
   a=frozen_${start_enc}_organic8_10pct_s0
   if [ -f "results/runs/$a/model.pt" ]; then echo "  $a: finished"
   elif running "$a"; then echo "  $a: already running"
-  else start "$a" "bash $REPO/scripts/train_supervisor.sh $a configs/$a.yaml GPU"; fi
+  else start "$a" "$RUNS_PER_GPU" "bash $REPO/scripts/train_supervisor.sh $a configs/$a.yaml GPU"; fi
 
   for s in $SEEDS_B; do
     s1=headsfirst1_${start_enc}_organic8_10pct_s$s
@@ -74,10 +91,10 @@ for start_enc in random plain; do
     stage2="bash $REPO/scripts/stage2_supervisor.sh $s1 $s2 GPU"
     if [ -f "results/runs/$s2/model.pt" ]; then echo "  $s2: finished"
     elif running "$s1" || running "$s2"; then echo "  $s1 / $s2: already running"
-    elif [ -f "results/runs/$s1/model.pt" ]; then start "$s2" "$stage2"
+    elif [ -f "results/runs/$s1/model.pt" ]; then start "$s2" "$RUNS_PER_GPU" "$stage2"
     else
       # stage 1, then stage 2 in its own session on the same GPU (so both are counted by the launchers)
-      start "$s1" "bash $REPO/scripts/train_supervisor.sh $s1 configs/$s1.yaml GPU && tmux new-session -d -s train_$s2 \"$stage2\""
+      start "$s1" "$RUNS_PER_GPU" "bash $REPO/scripts/train_supervisor.sh $s1 configs/$s1.yaml GPU && tmux new-session -d -s train_$s2 \"$stage2\""
     fi
   done
 done
