@@ -8,7 +8,7 @@
 #   frozen_<start>_organic8_10pct_s0                       procedure A, one run
 #   headsfirst1_<start>_..._s<seed> -> headsfirst2_<start>_..._s<seed>
 #                                                          procedure B, two stages in a chain:
-#                                                          stage 2 starts from stage 1's model.ckpt
+#                                                          stage 2 starts from stage 1's last epoch (model_last.ckpt)
 #   <start> = random (untrained encoder) or plain (plain-variant pretrained encoder)
 set -uo pipefail
 REPO=/storage3/lauren/code/jepa
@@ -43,7 +43,13 @@ pick_gpu() {
         if ($2 < lim && c == 0) { print g; exit }
         if (c > 0 && c < per) { print g; exit } }'
 }
-running() { tmux has-session -t "=train_$1" 2>/dev/null; }
+# alive here (tmux session), or alive on the OTHER node: its supervisor recorded that node and
+# its log moved in the last 30 min (same rule as launch_all.sh)
+running() {
+  tmux has-session -t "=train_$1" 2>/dev/null && return 0
+  local h; h=$(cat "results/runs/$1/host" 2>/dev/null)
+  [ -n "$h" ] && [ "$h" != "$(hostname -s)" ] && [ -n "$(find "results/runs/$1" -maxdepth 1 -name 'train.log' -mmin -30 2>/dev/null)" ]
+}
 start() {  # $1 = session/run name, $2 = command
   local gpu=""
   for attempt in $(seq 1 144); do gpu=$(pick_gpu); [ -n "$gpu" ] && break; echo "  $1: no GPU with room, waiting 10 min"; sleep 600; done
@@ -64,13 +70,14 @@ for start_enc in random plain; do
   for s in $SEEDS_B; do
     s1=headsfirst1_${start_enc}_organic8_10pct_s$s
     s2=headsfirst2_${start_enc}_organic8_10pct_s$s
-    stage2="bash $REPO/scripts/train_supervisor.sh $s2 configs/$s2.yaml GPU"
+    # stage 2 starts from stage 1's LAST epoch (scripts/stage2_supervisor.sh writes model_last.ckpt first)
+    stage2="bash $REPO/scripts/stage2_supervisor.sh $s1 $s2 GPU"
     if [ -f "results/runs/$s2/model.pt" ]; then echo "  $s2: finished"
     elif running "$s1" || running "$s2"; then echo "  $s1 / $s2: already running"
     elif [ -f "results/runs/$s1/model.pt" ]; then start "$s2" "$stage2"
     else
       # stage 1, then stage 2 in its own session on the same GPU (so both are counted by the launchers)
-      start "$s1" "bash $REPO/scripts/train_supervisor.sh $s1 configs/$s1.yaml GPU && tmux new-session -d -s train_$s2 '$stage2'"
+      start "$s1" "bash $REPO/scripts/train_supervisor.sh $s1 configs/$s1.yaml GPU && tmux new-session -d -s train_$s2 \"$stage2\""
     fi
   done
 done

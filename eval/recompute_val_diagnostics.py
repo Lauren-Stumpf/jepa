@@ -11,8 +11,9 @@ side shows how much of the logged train/validation gap came from batch makeup.
 
 The loss terms are computed with the same functions and the same code path as the
 validation loop in train/pretrain_jepa.py (no augmentation, encoder through encode()).
-The file-order column should reproduce the last epoch of the run's history.json; the
-script prints both so this can be checked.
+For runs made before the shuffle, the file-order column should reproduce the last epoch of the
+run's history.json; for runs made after it, the shuffled column should. Run from the repository root
+(the config path in the manifest is relative to it).
 
   python eval/recompute_val_diagnostics.py results/runs/jepa_pretrain_plain_organic8 \
       --val data/organic8/val.xyz --out results/eval/val_diagnostics_plain.json
@@ -39,7 +40,7 @@ def evaluate(frames, model, pred, proj, embed, a, dtype, device):
             now, fut = make_batch(frames[b:b + a["batch_size"]], model, dtype, device, augment=False)
             h_now = encode(model, now)
             loss, parts = jepa_loss(embed(proj(h_now)), embed(proj(encode(model, fut))), pred,
-                                    a["w_inv"], a["w_var"], a["w_cov"], a["relative_loss"])
+                                    a["w_inv"], a["w_var"], a["w_cov"], a.get("relative_loss", False))
             _, _, de = vicreg_terms(h_now)
             parts.update({"enc_rank": de["eff_rank"], "enc_dead": de["dead_frac"]})
             parts["loss"] = loss.item()
@@ -58,7 +59,8 @@ def main():
     args = ap.parse_args()
     man = json.load(open(os.path.join(args.run_dir, "manifest.json")))
     a = man["args"]
-    variant = man["predictor_variant"]
+    variant = man.get("predictor_variant", "norm_input")   # runs before 9 Nov evening did not record it
+    logged_order = "shuffled" if "val_shuffle_seed" in man else "file_order"
     device = "cuda" if torch.cuda.is_available() else "cpu"
     dtype = torch.float32
 
@@ -96,7 +98,9 @@ def main():
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     json.dump(res, open(args.out, "w"), indent=1)
     keys = ["inv_ratio", "var", "cov", "std_min", "dead_frac", "eff_rank", "enc_rank", "enc_dead"]
-    print(f"{res['run']} ({variant}), state from epoch {res['epoch_of_state']}")
+    res["logged_order"] = logged_order
+    print(f"{res['run']} ({variant}), state from epoch {res['epoch_of_state']}; the run logged its validation "
+          f"diagnostics in {logged_order.replace('_', ' ')}, so that column should match 'logged'")
     print(f"{'diagnostic':12s} {'logged':>10s} {'file order':>11s} {'shuffled':>10s}")
     for k in keys:
         print(f"{k:12s} {res['logged_last_epoch'].get(k, float('nan')):10.4f} "

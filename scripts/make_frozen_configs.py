@@ -14,7 +14,8 @@ Two starting encoders:
 Two procedures (the third, everything trains from step 1, is already done):
   A  frozen     encoder fixed for all 100 epochs; only the heads train     (seed 0 only)
   B  heads first: stage 1, 10 epochs heads only; stage 2, 90 epochs everything,
-                  starting from stage 1's final checkpoint                (seeds 0, 1, 2)
+                  starting from stage 1's LAST epoch (model_last.ckpt,      (seeds 0, 1, 2)
+                  made by train/last_epoch_checkpoint.py; metatrain would otherwise load the best epoch)
 
   python scripts/make_frozen_configs.py
 """
@@ -64,7 +65,7 @@ def main():
             made.append(make(seed, s1, 10, START[start].format(seed=seed), "heads",
                              f"procedure B stage 1 (heads only, 10 epochs), {start} encoder"))
             made.append(make(seed, f"headsfirst2_{start}_organic8_10pct_s{seed}", 90,
-                             f"{REPO}/results/runs/{s1}/model.ckpt", "full",
+                             f"{REPO}/results/runs/{s1}/model_last.ckpt", "full",
                              f"procedure B stage 2 (everything, 90 epochs) from the end of {s1}"))
     print("\n".join(made))
 

@@ -32,7 +32,7 @@ architecture:
     log_interval: 1
     checkpoint_interval: 1   # keep every epoch; selection with the energy criterion is done afterwards
     finetune:
-      read_from: /storage3/lauren/code/jepa/results/runs/headsfirst1_random_organic8_10pct_s0/model.ckpt
+      read_from: /storage3/lauren/code/jepa/results/runs/headsfirst1_random_organic8_10pct_s0/model_last.ckpt
       method: full            # every weight trains
     loss:
       position: {type: mse, weight: 1.0, reduction: mean}

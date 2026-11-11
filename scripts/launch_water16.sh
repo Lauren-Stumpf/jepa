@@ -48,7 +48,13 @@ pick_gpu() {  # $1 = how many of our runs may share the GPU (1 = needs an empty 
         if ($2 < lim && c == 0) { print g; exit }
         if (per > 1 && c > 0 && c < per) { print g; exit } }'
 }
-running() { tmux has-session -t "=train_$1" 2>/dev/null; }
+# alive here (tmux session), or alive on the OTHER node: its supervisor recorded that node and
+# its log moved in the last 30 min (same rule as launch_all.sh)
+running() {
+  tmux has-session -t "=train_$1" 2>/dev/null && return 0
+  local h; h=$(cat "results/runs/$1/host" 2>/dev/null)
+  [ -n "$h" ] && [ "$h" != "$(hostname -s)" ] && [ -n "$(find "results/runs/$1" -maxdepth 1 -name 'train.log' -mmin -30 2>/dev/null)" ]
+}
 start() {  # $1 = run name, $2 = runs allowed per GPU, $3 = command (GPU is replaced by the index)
   local gpu=""
   for attempt in $(seq 1 144); do gpu=$(pick_gpu "$2"); [ -n "$gpu" ] && break; echo "  $1: no GPU with room, waiting 10 min"; sleep 600; done
