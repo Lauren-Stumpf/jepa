@@ -430,3 +430,58 @@ To state with the results: the three fine-tune seeds per arm share one
 pretraining seed, so their spread understates the pretrained arm's variance;
 and residrel differs from resid by an effective prediction weight of
 25/trivial, which is thousands of times larger, under gradient clipping at 1.
+
+## 2026-11-11: test-set evaluation, and decisions after the supervisor meeting
+
+Test set (21 unseen molecules, 2,100 frames, eval/eval_onestep.py; results/eval/test/).
+Mass-scaled RMSE, position | momentum:
+  baseline 10% (seeds 0,1,2)          0.0099 0.0098 0.0102 | 0.0223 0.0224 0.0231
+  plain 10%                           0.0101 0.0102 0.0102 | 0.0232 0.0237 0.0234
+  normtarget 10%                      0.0102 0.0103 0.0104 | 0.0237 0.0242 0.0244
+  resid 10%                           0.0105 0.0106 0.0106 | 0.0240 0.0242 0.0242
+  proj 10%                            0.0118 0.0113 0.0117 | 0.0272 0.0262 0.0272
+  baseline all data, 100 epochs       0.0061 | 0.0138
+  baseline all data, 300 epochs       0.0062 | 0.0141
+  normtarget pretrained, all data     0.0064 | 0.0144
+  authors' released universal model   0.0082 | 0.0177   (it was trained on these molecules)
+  straight-line guess 0.1544, momentum unchanged 0.3330
+Water (test, position | momentum; straight-line guess, momentum unchanged in brackets):
+  1 fs 0.0001 | 0.0004 (0.0027, 0.0547); 4 fs 0.0003 | 0.0011 (0.0364, 0.1678);
+  16 fs 0.0024 | 0.0038 (0.2105, 0.2036).
+Reading: on the test set, every pretrained arm is worse than the baseline at 10% data; at
+full data the 3.7% validation gain of the pretrained model does not hold (test 4% worse),
+and the 300-epoch baseline is no better than the 100-epoch one, so differences of a few
+percent between single full-data runs are within the difference between validation and
+test molecules. The full-data compute-matched comparison is not pursued (Lauren): a few
+percent is not worth a day of eight cards. Earlier quoted test numbers for the 100-epoch
+baseline (0.0061 | 0.0135) came from a different frame sample; the numbers above replace them.
+An earlier claim that pretrained models fit training molecules better was based on seed 0
+only; over three seeds only the plain variant is (within seed spread) and the others are worse.
+
+Measured water time scales (eval/water_bond_periods.py, 5 runs): O-H stretch 3,602 cm^-1
+(9.3 fs), bend 1,668 cm^-1 (20.0 fs), rocking 584 cm^-1 (57 fs). 16 fs covers 1.7 stretch cycles.
+
+Priority list agreed: (1) frozen-encoder fine-tuning, (2) relative-loss probe and fine-tunes,
+(3) test-set evaluation, (4) shuffled validation diagnostics, (5) water 16 fs mirroring
+organic, (6) rollout evaluator. Parked: compute-matched full-data comparison, 10% split by
+molecule, supervised-encoder check, new objectives, density functional theory comparison.
+
+Frozen-encoder design (Lauren added procedure A): procedure A, encoder frozen for all 100
+epochs (one seed); procedure B, heads only for 10 epochs then everything for 90, from stage
+1's last epoch (three seeds); procedure C (everything from step 1) is the existing runs.
+Random and plain-pretrained encoders go through the same metatrain fine-tuning path
+(random encoder saved by train/make_random_checkpoint.py). Decision rule set in advance: a
+difference counts if larger than about three seed spreads (about 0.0006 momentum).
+
+Pretraining validation batches are now shuffled once with a fixed seed: in file order each
+validation batch held one molecule, so validation variance, covariance and rank were not
+comparable with training (recomputing the plain run on 640 pairs: rank 76 in file order,
+182 shuffled). Prediction-error ratios are not affected.
+
+Water pretraining batch is 8 frames (1,536 atoms), matching organic's 64 pairs x 23 atoms
+(1,477) because the regulariser is estimated over the atoms of a batch. Water 10% subset
+keeps every 10th forward pair together with its time-reversed copy (896 frames). Caveat:
+water 10% gives 5,600 optimiser steps in 100 epochs against about 52,000 for organic 10%.
+
+All new code was reviewed by two independent agents before running; fixes in commits
+0fab73f and ea2fa62 (branch frozen-water-experiments).
