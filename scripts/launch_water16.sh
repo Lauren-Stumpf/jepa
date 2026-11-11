@@ -35,6 +35,7 @@ fi
 # Our runs on each GPU, recounted on every call from the gpu files of live sessions (another
 # launcher may have placed runs meanwhile). A pretraining fills its card. Sharing also needs
 # SHARE_FREE_MB of free memory, because a run that is still loading data uses none yet.
+MIN_TOTAL_FT_MB=${MIN_TOTAL_FT_MB:-40000}   # so water fine-tunes never go on a 24 GB card (pretraining, batch 8, fits)
 SHARE_FREE_MB=${SHARE_FREE_MB:-30000}   # a water fine-tune (16 frames x 192 atoms) uses about 28 GB: never share a 46 GB card, never fit a 24 GB one
 count_ours() {
   local f n g k out=""
@@ -49,9 +50,10 @@ count_ours() {
 }
 pick_gpu() {  # $1 = how many of our runs may share the GPU (1 = needs an empty GPU)
   nvidia-smi --query-gpu=index,memory.used,memory.total --format=csv,noheader,nounits |
-    awk -F', ' -v lim="$FREE_MB" -v ours="$(count_ours)" -v per="$1" -v need="$SHARE_FREE_MB" '
+    awk -F', ' -v lim="$FREE_MB" -v ours="$(count_ours)" -v per="$1" -v need="$SHARE_FREE_MB" -v mintot="$MIN_TOTAL_FT_MB" '
       BEGIN { n = split(ours, a, " "); for (i = 1; i <= n; i++) if (a[i] != "") cnt[a[i]]++ }
       { g = $1; c = (g in cnt) ? cnt[g] : 0
+        if (per > 1 && $3 < mintot) next      # fine-tunes need a card with room for about 28 GB
         if ($2 < lim && c == 0) { print g; exit }
         if (per > 1 && c > 0 && c < per && $3 - $2 > need) { print g; exit } }'
 }
