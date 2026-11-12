@@ -518,3 +518,21 @@ property of 8 fs dynamics.
 Water fine-tunes use about 28 GB at batch 16: they ran out of memory on torrnode7's 24 GB
 cards (two runs moved to results/runs_invalid/*_oom_torrnode7_20261111) and run on A40s on
 torrnode15 and torrnode12. Launchers now claim a run atomically on the shared filesystem.
+
+## 12 Nov 2026
+
+New Weights and Biases project jepa-flashmd-experiments: one group per experiment (E00 to
+E06), job type = arm, a "<E> summary" run per experiment with bar charts (test and validation
+errors, seeds as dots) and learning curves; the card is the summary run's notes. 53 finished
+runs imported from the old project's logs (scripts/wandb_import.py), which stays unchanged.
+Runs that fail or restart from scratch are deleted from the new project by the supervisors
+(scripts/wandb_delete_runs.py, new project only).
+
+Water 10% test evaluation (all 1,120 test frames, same command as the full-data water test):
+test momentum baseline 0.0312, plain 0.0268 (14% better), normalised target 0.0252 (19%
+better), matching validation. Single seeds so far: residual 0.0249, projector 0.0291,
+residual relative loss 0.0213 (32% better). Details in experiments/E04/card.md.
+
+Started E05 (hypothesis A, 9 runs of 1,000 epochs) and E06 (hypothesis B, regulariser-only
+pretraining then 3 fine-tunes) with scripts/launch_runs.sh. The E06 pretraining logs a
+prediction-term gradient share of 0.00, as the card requires.

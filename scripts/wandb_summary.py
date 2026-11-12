@@ -139,9 +139,9 @@ def main():
         ax.set_yticklabels([f"{a} ({len(vals[a][k])})" for a in present])
         ax.set_xlabel(f"{lab} (mass-scaled, per atom; lower is better)")
         ax.set_xlim(0, max(max(vals[a][k]) for a in present) * 1.45)
-        ax.set_title(f"{exp}: {lab}\n(blue = reference arm, orange = compared with it; bar = mean over seeds, dots = seeds, line = spread)", fontsize=9)
+        ax.set_title(f"{exp}: {lab}\nblue = reference arm, orange = compared with it\nbar = mean over seeds, dots = seeds, line = spread", fontsize=9)
         fig.tight_layout()
-        buf = io.BytesIO(); fig.savefig(buf, format="png"); plt.close(fig); buf.seek(0)
+        buf = io.BytesIO(); fig.savefig(buf, format="png", bbox_inches="tight"); plt.close(fig); buf.seek(0)
         images[lab] = wandb.Image(Image.open(buf))
 
     # learning curves of validation momentum error
@@ -167,7 +167,7 @@ def main():
     ax.set_title(f"{exp}: learning curves (mean over seeds, band = spread)", fontsize=9)
     ax.legend(fontsize=8)
     fig.tight_layout()
-    buf = io.BytesIO(); fig.savefig(buf, format="png"); plt.close(fig); buf.seek(0)
+    buf = io.BytesIO(); fig.savefig(buf, format="png", bbox_inches="tight"); plt.close(fig); buf.seek(0)
     images["Learning curves"] = wandb.Image(Image.open(buf))
 
     card = os.path.join(REPO, "experiments", exp, "card.md")
