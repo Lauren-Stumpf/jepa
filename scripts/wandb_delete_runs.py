@@ -21,6 +21,7 @@ import os
 import re
 
 DELETABLE = {"jepa-flashmd-experiments"}
+ENTITY = "lauren-stumpf-oxford-university"
 
 
 def project_of(run_dir):
@@ -53,7 +54,7 @@ def main():
     try:
         import wandb
         api = wandb.Api(timeout=30)
-        entity = api.default_entity
+        entity = ENTITY
     except Exception as e:   # noqa: BLE001
         print(f"wandb not reachable, nothing deleted: {e}")
         return

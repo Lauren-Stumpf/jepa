@@ -31,7 +31,11 @@ while [ ! -f "$RUN/manifest.json" ]; do
     if [ "$fails" -ge "$MAX_FAILS" ]; then
       echo "giving up on $NAME" | tee -a "$RUN/supervisor.log"
       # an abandoned pretraining's Weights and Biases run is removed (experiment project only)
-      [ -d "$RUN/wandb" ] && python "$REPO/scripts/wandb_delete_runs.py" "$RUN/wandb" >> "$RUN/supervisor.log" 2>&1
+      # wandb refuses to reuse a deleted run's id, so the id file goes too: a later restart gets a new id
+      if [ -d "$RUN/wandb" ]; then
+        timeout 300 python "$REPO/scripts/wandb_delete_runs.py" "$RUN/wandb" >> "$RUN/supervisor.log" 2>&1
+        mv "$RUN/wandb" "$RUN/wandb_abandoned_$(date '+%Y%m%d_%H%M%S')"; rm -f "$RUN/wandb_run_id"
+      fi
       exit 1
     fi
     sleep 300

@@ -23,10 +23,17 @@ import os
 import sys
 
 import numpy as np
+import pandas as pd   # needed for learning curves; imported first so a missing package stops the script before anything is deleted
 
 sys.path.insert(0, os.path.dirname(__file__))
-from wandb_common import (EXPERIMENTS, PROJECT, REPO, TEST_P, TEST_Q, TRAIN_P, VAL_P, VAL_Q,  # noqa: E402
+from wandb_common import (ENTITY, EXPERIMENTS, PROJECT, REPO, TEST_P, TEST_Q, TRAIN_P, VAL_P, VAL_Q,  # noqa: E402
                           test_metrics)
+
+# experiments whose comparison arms live in another experiment's group: (group, job type, label here)
+REFERENCES = {
+    "E02": [("E00", "organic8-100ep", "baseline")],
+    "E06": [("E04", "baseline", "baseline"), ("E04", "plain", "plain (E04)")],
+}
 
 MEASURES = [(VAL_P, "Validation momentum error"), (TEST_P, "Test momentum error"),
             (VAL_Q, "Validation position error"), (TEST_Q, "Test position error"),
@@ -49,13 +56,20 @@ def main():
     import wandb
     from PIL import Image
     api = wandb.Api(timeout=60)
-    entity = api.default_entity
+    entity = ENTITY
     runs = list(api.runs(f"{entity}/{PROJECT}", filters={"group": exp}))
     for r in runs:
         if r.job_type == "summary":
             r.delete()
     runs = [r for r in runs if r.job_type != "summary" and r.state == "finished"]
     train_runs = [r for r in runs if not (r.job_type or "").startswith("pretrain-")]
+    # reference arms filed under another experiment, shown here as extra arms
+    arm_of = {r.id: r.job_type for r in train_runs}
+    for ref_exp, ref_arm, label in REFERENCES.get(exp, []):
+        for r in api.runs(f"{entity}/{PROJECT}", filters={"group": ref_exp, "jobType": ref_arm}):
+            if r.state == "finished":
+                arm_of[r.id] = label
+                train_runs.append(r)
     if not train_runs:
         print(f"{exp}: no finished training runs yet")
         return
@@ -68,7 +82,7 @@ def main():
                 r.summary[k] = v
             r.summary.update()
 
-    arms = order_arms(sorted({r.job_type for r in train_runs}))
+    arms = order_arms(sorted({arm_of[r.id] for r in train_runs}))
 
     def base_of(a):
         """The arm each arm is compared with: "baseline" in experiments that have one; in the
@@ -79,9 +93,9 @@ def main():
         if "-" in a and "random-" + a.split("-", 1)[1] in arms:
             return "random-" + a.split("-", 1)[1]
         return "baseline" if "baseline" in arms else None
-    vals = {a: {k: [r.summary.get(k) for r in train_runs if r.job_type == a and r.summary.get(k) is not None]
+    vals = {a: {k: [r.summary.get(k) for r in train_runs if arm_of[r.id] == a and r.summary.get(k) is not None]
                 for k, _ in MEASURES} for a in arms}
-    seeds = {a: sum(1 for r in train_runs if r.job_type == a) for a in arms}
+    seeds = {a: sum(1 for r in train_runs if arm_of[r.id] == a) for a in arms}
 
     def mean(a, k):
         v = vals[a][k]
@@ -135,14 +149,13 @@ def main():
     for i, a in enumerate(arms):
         curves = []
         for r in train_runs:
-            if r.job_type != a:
+            if arm_of[r.id] != a:
                 continue
             h = r.history(keys=[VAL_P], pandas=True, samples=5000)
             if len(h):
                 curves.append(h.set_index("_step")[VAL_P])
         if not curves:
             continue
-        import pandas as pd
         df = pd.concat(curves, axis=1).sort_index()
         m, s = df.mean(axis=1), df.std(axis=1)
         ax.plot(df.index, m, label=f"{a} ({df.shape[1]})", color=f"C{i}")
@@ -161,7 +174,7 @@ def main():
     notes = open(card).read() if os.path.exists(card) else EXPERIMENTS.get(exp, "")
     local = os.path.join(REPO, "results", "wandb_import")
     os.makedirs(local, exist_ok=True)
-    run = wandb.init(project=PROJECT, group=exp, job_type="summary", name=f"{exp} summary", notes=notes,
+    run = wandb.init(entity=ENTITY, project=PROJECT, group=exp, job_type="summary", name=f"{exp} summary", notes=notes,
                      config={"experiment": exp, "description": EXPERIMENTS.get(exp, "")}, dir=local)
     log = {f"summary/{lab}": img for lab, img in images.items()}
     log["summary/table"] = wandb.Table(columns=cols, data=table_rows)

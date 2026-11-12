@@ -44,7 +44,7 @@ for f in results/runs/*/gpu; do
   g=$(cat "$f")
   # a pretraining needs the whole card (about 15 GB on an A40, 22 GB on a Quadro): count it as
   # filling the card, so no fine-tune is ever placed next to one (two fine-tunes ran out of memory)
-  case "$n" in jepa_pretrain_*) for k in $(seq 1 "$RUNS_PER_GPU"); do ours="$ours $g"; done ;; *) ours="$ours $g" ;; esac
+  case "$n" in *pretrain*) for k in $(seq 1 "$RUNS_PER_GPU"); do ours="$ours $g"; done ;; *) ours="$ours $g" ;; esac
 done
 pick_gpu() {  # $1 = how many of our runs may share the GPU (1 = needs an empty GPU)
   # eligible: empty, or (when sharing is allowed) only our runs on it and room for one more

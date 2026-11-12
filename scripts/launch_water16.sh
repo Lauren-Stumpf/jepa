@@ -44,7 +44,7 @@ count_ours() {
     n=$(basename "$(dirname "$f")")
     tmux has-session -t "=train_$n" 2>/dev/null || continue
     g=$(cat "$f")
-    case "$n" in jepa_pretrain_*) for k in $(seq 1 "$RUNS_PER_GPU"); do out="$out $g"; done ;; *) out="$out $g" ;; esac
+    case "$n" in *pretrain*) for k in $(seq 1 "$RUNS_PER_GPU"); do out="$out $g"; done ;; *) out="$out $g" ;; esac
   done
   echo "$out"
 }

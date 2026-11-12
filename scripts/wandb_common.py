@@ -10,6 +10,7 @@ import os
 import re
 
 PROJECT = "jepa-flashmd-experiments"
+ENTITY = "lauren-stumpf-oxford-university"
 REPO = "/storage3/lauren/code/jepa"
 
 # metatrain's own wandb keys (step = epoch); validation/training errors are in mass-scaled units

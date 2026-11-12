@@ -11,8 +11,10 @@ What is imported, from the files on the cluster:
   pretrainings    every epoch of history.json (prediction error, ratio to copying, regulariser
                   terms, rank), under the keys train/pretrain_jepa.py logs
 
-Only finished runs are imported (model.pt, or manifest.json for a pretraining). Each import
-gets a fixed id, so running this again skips what is already there; --replace re-imports.
+Only finished runs are imported (model.pt, or manifest.json for a pretraining). An import is
+found again by its source run name (config.source_run), so running this again skips what is
+already there; --replace deletes it and imports it again under a new id (wandb does not reuse
+a deleted run's id).
 Runs that failed, were cancelled or moved to results/runs_invalid are never imported.
 
   python scripts/wandb_import.py [--only E04] [--replace] [--dry_run]
@@ -24,11 +26,12 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
-from wandb_common import PROJECT, REPO, classify, epochs_from_log, latest_train_log, test_metrics  # noqa: E402
+from wandb_common import ENTITY, PROJECT, REPO, classify, epochs_from_log, latest_train_log, test_metrics  # noqa: E402
 
 
-def import_id(name):
-    return ("imp-" + name.replace("_", "-"))[:120]
+def new_import_id(name):
+    import uuid
+    return f"imp-{name.replace('_', '-')}-{uuid.uuid4().hex[:6]}"[:120]
 
 
 def main():
@@ -39,7 +42,7 @@ def main():
     args = ap.parse_args()
     import wandb
     api = wandb.Api(timeout=60)
-    entity = api.default_entity
+    entity = ENTITY
     runs_root = os.path.join(REPO, "results", "runs")
 
     for name in sorted(os.listdir(runs_root)):
@@ -58,11 +61,9 @@ def main():
         if not done:
             print(f"skip (not finished): {name}")
             continue
-        rid = import_id(name)
-        try:
-            old = api.run(f"{entity}/{PROJECT}/{rid}")
-        except Exception:   # noqa: BLE001
-            old = None
+        # an error here (no network) stops the script rather than risk importing twice
+        found = list(api.runs(f"{entity}/{PROJECT}", filters={"config.source_run": name}))
+        old = found[0] if found else None
         if old is not None and not args.replace:
             print(f"skip (already imported): {name}")
             continue
@@ -96,11 +97,12 @@ def main():
               f"{len(rows)} epochs, test {'yes' if summary else 'no'}")
         if args.dry_run:
             continue
-        if old is not None:
-            old.delete()
+        for o in found:
+            o.delete()
+        rid = new_import_id(name)
         local = os.path.join(REPO, "results", "wandb_import")
         os.makedirs(local, exist_ok=True)
-        run = wandb.init(project=PROJECT, id=rid, name=label, group=exp, job_type=arm, config=config,
+        run = wandb.init(entity=ENTITY, project=PROJECT, id=rid, resume="never", name=label, group=exp, job_type=arm, config=config,
                          notes=f"Imported from results/runs/{name} (logged before the experiment project existed).",
                          dir=local)
         for r in rows:

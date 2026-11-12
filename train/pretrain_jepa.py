@@ -397,9 +397,20 @@ def main():
     if args.wandb:
         import wandb
         run_name = os.path.basename(args.out.rstrip("/"))
+        # one id per pretraining, kept in a file so a resumed run continues the same wandb run; a
+        # new id is made if the file is missing (after scripts/pretrain_supervisor.sh deleted an
+        # abandoned run, whose id wandb will not accept again)
+        id_file = os.path.join(args.out, "wandb_run_id")
+        if os.path.exists(id_file):
+            run_id = open(id_file).read().strip()
+        else:
+            import uuid
+            run_id = f"{run_name}-{uuid.uuid4().hex[:6]}"
+            with open(id_file, "w") as f:
+                f.write(run_id)
         # one wandb run per pretraining (same id on resume); its local files live in the run folder,
         # so scripts/wandb_delete_runs.py can find and remove the run if it is abandoned
-        run = wandb.init(project=args.wandb, name=run_name, id=run_name, config=vars(args), resume="allow",
+        run = wandb.init(project=args.wandb, name=run_name, id=run_id, config=vars(args), resume="allow",
                          group=args.wandb_group, job_type=args.wandb_job_type, dir=args.out)
 
     pull_log = []

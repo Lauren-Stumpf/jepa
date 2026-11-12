@@ -101,19 +101,28 @@ try_start() {  # $1 name, $2 kind, $3 min MB, $4 per GPU, $5 spec; starts the ru
 start_time=$(date +%s)
 while :; do
   echo "$(date '+%F %T') pass over $RUNS_FILE on $HOST"
-  pending=0
+  pending=0; abandoned=0
   while IFS='|' read -r name kind minmb per spec; do
     [[ -z "$name" || "$name" == \#* ]] && continue
     if finished "$name"; then continue; fi
     if grep -q "giving up" "results/runs/$name/supervisor.log" 2>/dev/null; then
-      echo "  $name: its supervisor gave up after repeated failures; needs a person (not restarted)"; continue
+      echo "  $name: its supervisor gave up after repeated failures; needs a person (not restarted)"
+      abandoned=$((abandoned + 1)); continue
     fi
     pending=$((pending + 1))
     if running "$name"; then continue; fi
-    if ! deps_done "$kind" "$spec"; then echo "  $name: waiting for the run it starts from"; continue; fi
+    if ! deps_done "$kind" "$spec"; then
+      dep=$(dirname "$(grep -m1 "read_from: /storage3" "$spec" | awk '{print $2}')")
+      if grep -q "giving up" "$dep/supervisor.log" 2>/dev/null; then
+        echo "  $name: the run it starts from was abandoned; not started"; pending=$((pending - 1)); abandoned=$((abandoned + 1))
+      else
+        echo "  $name: waiting for the run it starts from"
+      fi
+      continue
+    fi
     try_start "$name" "$kind" "$minmb" "$per" "$spec"
   done < "$RUNS_FILE"
-  [ "$pending" -eq 0 ] && { echo "$(date '+%F %T') all runs in $RUNS_FILE finished"; break; }
+  [ "$pending" -eq 0 ] && { echo "$(date '+%F %T') nothing left to run in $RUNS_FILE ($abandoned abandoned)"; break; }
   [ $(( $(date +%s) - start_time )) -gt $((MAX_HOURS * 3600)) ] && { echo "stopping after $MAX_HOURS h; $pending runs not finished"; break; }
   sleep $((PASS_MIN * 60))
 done
