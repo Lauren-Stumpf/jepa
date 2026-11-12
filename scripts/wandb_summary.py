@@ -66,8 +66,8 @@ def main():
     # reference arms filed under another experiment, shown here as extra arms
     arm_of = {r.id: r.job_type for r in train_runs}
     for ref_exp, ref_arm, label in REFERENCES.get(exp, []):
-        for r in api.runs(f"{entity}/{PROJECT}", filters={"group": ref_exp, "jobType": ref_arm}):
-            if r.state == "finished":
+        for r in api.runs(f"{entity}/{PROJECT}", filters={"group": ref_exp}):
+            if r.state == "finished" and r.job_type == ref_arm:
                 arm_of[r.id] = label
                 train_runs.append(r)
     if not train_runs:

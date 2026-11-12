@@ -403,6 +403,8 @@ def main():
         id_file = os.path.join(args.out, "wandb_run_id")
         if os.path.exists(id_file):
             run_id = open(id_file).read().strip()
+        elif args.wandb != "jepa-flashmd-experiments":
+            run_id = run_name   # older projects keep the old rule (id = folder name), so resumes continue their run
         else:
             import uuid
             run_id = f"{run_name}-{uuid.uuid4().hex[:6]}"

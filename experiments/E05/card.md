@@ -37,7 +37,7 @@ These use the existing E04 pretrainings.
 1. 1,000 epochs on 896 pairs does not simply overfit. Checked by watching whether validation error starts rising while training error keeps falling.
 2. The E04 pretrainings are representative. Only one pretraining seed per variant, as in E04.
 3. The 100-epoch and 1,000-epoch schedules differ only in length. The cosine shape is the same.
-4. Checkpoints are kept every 50 epochs instead of every epoch, to save disk (a checkpoint is about 430 MB). This does not change training.
+4. Checkpoints are kept every 50 epochs instead of every epoch, to save disk (a checkpoint is about 430 MB). This does not change training. Selecting a checkpoint by the energy criterion therefore has a choice only every 50 epochs in E05, against every epoch in E04: fair within E05, but noted before comparing E05 with E04.
 
 **Measure and rule:**
 - Primary measure: test momentum error, mean of three seeds.
