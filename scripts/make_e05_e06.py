@@ -50,7 +50,7 @@ def main():
             name = f"e05_{arm}_water16_10pct_1000ep_s{s}"
             copy_config(src.format(s=s), name, "E05", arm,
                         [(r"^    num_epochs: 100 .*$", "    num_epochs: 1000       # E05: ten times the 100-epoch runs"),
-                         (r"^    checkpoint_interval: 1 .*$", "    checkpoint_interval: 50  # E05: 20 checkpoints per run instead of 1,000 (disk)")],
+                         (r"^    checkpoint_interval: \d+ .*$", "    checkpoint_interval: 50  # E05: 20 checkpoints per run instead of 1,000 (disk)")],
                         f"{arm}, seed {s}, 1000 epochs")
             lines.append(f"{name}|train|40000|1|configs/{name}.yaml")
     with open(os.path.join(HERE, "experiments/E05/runs.txt"), "w") as f:
