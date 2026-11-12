@@ -536,3 +536,13 @@ residual relative loss 0.0213 (32% better). Details in experiments/E04/card.md.
 Started E05 (hypothesis A, 9 runs of 1,000 epochs) and E06 (hypothesis B, regulariser-only
 pretraining then 3 fine-tunes) with scripts/launch_runs.sh. The E06 pretraining logs a
 prediction-term gradient share of 0.00, as the card requires.
+
+Checkpoints thinned (agreed with Lauren): in every finished fine-tuning run, per-epoch
+checkpoints were deleted except every 10th epoch and the last (scripts/thin_checkpoints.sh):
+4,541 files, 1,742 GB; results/runs went from 2.2 TB to 511 GB. Runs still training were
+skipped and can be thinned once finished by running the script again. New runs save every
+10th epoch (checkpoint_interval 10; E05 stays at 50). This does not change training:
+metatrain tracks the best-validation model every epoch whatever the interval. The paper's
+checkpoint selection, if run, works on a 10-epoch grid; it should also include the final
+model.ckpt, because new 100-epoch runs save model_90 as their last numbered file while
+thinned older runs kept model_99.
