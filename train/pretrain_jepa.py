@@ -322,6 +322,8 @@ def main():
                     help="ablation: independent random rotations for the two frames of a pair (default: shared)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--wandb", default="", help="wandb project name; empty disables")
+    ap.add_argument("--wandb_group", default=None, help="wandb group: the experiment id (e.g. E06)")
+    ap.add_argument("--wandb_job_type", default=None, help="wandb job type: the arm (e.g. pretrain-regonly)")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
     torch.manual_seed(args.seed)
@@ -395,7 +397,10 @@ def main():
     if args.wandb:
         import wandb
         run_name = os.path.basename(args.out.rstrip("/"))
-        run = wandb.init(project=args.wandb, name=run_name, id=run_name, config=vars(args), resume="allow")
+        # one wandb run per pretraining (same id on resume); its local files live in the run folder,
+        # so scripts/wandb_delete_runs.py can find and remove the run if it is abandoned
+        run = wandb.init(project=args.wandb, name=run_name, id=run_name, config=vars(args), resume="allow",
+                         group=args.wandb_group, job_type=args.wandb_job_type, dir=args.out)
 
     pull_log = []
     rng = np.random.default_rng(args.seed + start_epoch)

@@ -28,7 +28,12 @@ while [ ! -f "$RUN/manifest.json" ]; do
     fails=$((fails + 1))
     echo "$(date '+%F %T') $NAME stopped with status $status (failure $fails of $MAX_FAILS); last log lines:" | tee -a "$RUN/supervisor.log"
     tail -5 "$RUN/train.log" | tee -a "$RUN/supervisor.log"
-    [ "$fails" -ge "$MAX_FAILS" ] && { echo "giving up on $NAME" | tee -a "$RUN/supervisor.log"; exit 1; }
+    if [ "$fails" -ge "$MAX_FAILS" ]; then
+      echo "giving up on $NAME" | tee -a "$RUN/supervisor.log"
+      # an abandoned pretraining's Weights and Biases run is removed (experiment project only)
+      [ -d "$RUN/wandb" ] && python "$REPO/scripts/wandb_delete_runs.py" "$RUN/wandb" >> "$RUN/supervisor.log" 2>&1
+      exit 1
+    fi
     sleep 300
   fi
 done

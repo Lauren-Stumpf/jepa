@@ -1,0 +1,10 @@
+# name|kind|min GPU memory (MB)|runs per GPU|spec   (scripts/launch_runs.sh)
+e05_baseline_water16_10pct_1000ep_s0|train|40000|1|configs/e05_baseline_water16_10pct_1000ep_s0.yaml
+e05_baseline_water16_10pct_1000ep_s1|train|40000|1|configs/e05_baseline_water16_10pct_1000ep_s1.yaml
+e05_baseline_water16_10pct_1000ep_s2|train|40000|1|configs/e05_baseline_water16_10pct_1000ep_s2.yaml
+e05_plain_water16_10pct_1000ep_s0|train|40000|1|configs/e05_plain_water16_10pct_1000ep_s0.yaml
+e05_plain_water16_10pct_1000ep_s1|train|40000|1|configs/e05_plain_water16_10pct_1000ep_s1.yaml
+e05_plain_water16_10pct_1000ep_s2|train|40000|1|configs/e05_plain_water16_10pct_1000ep_s2.yaml
+e05_normtarget_water16_10pct_1000ep_s0|train|40000|1|configs/e05_normtarget_water16_10pct_1000ep_s0.yaml
+e05_normtarget_water16_10pct_1000ep_s1|train|40000|1|configs/e05_normtarget_water16_10pct_1000ep_s1.yaml
+e05_normtarget_water16_10pct_1000ep_s2|train|40000|1|configs/e05_normtarget_water16_10pct_1000ep_s2.yaml

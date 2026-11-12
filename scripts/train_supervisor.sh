@@ -23,6 +23,8 @@ fails=0
 while [ ! -f model.pt ]; do
   if [ -d outputs ]; then
     echo "$(date '+%F %T') $NAME was interrupted; starting again from scratch (previous outputs moved aside)" | tee -a supervisor.log
+    # the interrupted attempt's Weights and Biases run is removed (experiment project only), then its files moved aside
+    [ -d wandb ] && { python "$REPO/scripts/wandb_delete_runs.py" wandb >> supervisor.log 2>&1; mv wandb "wandb_interrupted_$(date '+%Y%m%d_%H%M%S')"; }
     mv outputs "outputs_interrupted_$(date '+%Y%m%d_%H%M%S')"
     mv train.log "train_interrupted_$(date '+%Y%m%d_%H%M%S').log" 2>/dev/null
     for c in model.ckpt model_last.ckpt; do [ -f "$c" ] && mv "$c" "${c%.ckpt}_interrupted_$(date '+%Y%m%d_%H%M%S').ckpt"; done
@@ -34,7 +36,11 @@ while [ ! -f model.pt ]; do
     fails=$((fails + 1))
     echo "$(date '+%F %T') $NAME stopped with status $status (failure $fails of $MAX_FAILS); last log lines:" | tee -a supervisor.log
     tail -5 train.log | tee -a supervisor.log
-    [ "$fails" -ge "$MAX_FAILS" ] && { echo "giving up on $NAME" | tee -a supervisor.log; exit 1; }
+    if [ "$fails" -ge "$MAX_FAILS" ]; then
+      echo "giving up on $NAME" | tee -a supervisor.log
+      [ -d wandb ] && python "$REPO/scripts/wandb_delete_runs.py" wandb >> supervisor.log 2>&1
+      exit 1
+    fi
     sleep 300
   fi
 done
