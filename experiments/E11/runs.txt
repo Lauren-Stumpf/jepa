@@ -1,0 +1,5 @@
+# name|kind|min GPU memory (MB)|runs per GPU|spec   (scripts/launch_runs.sh)
+e11_pretrain_nopred_water16|pretrain|20000|1|CONFIG=configs/flashmd_water16_scratch.yaml TRAIN=data/water/pairs/16fs/train.xyz VAL=data/water/pairs/16fs/val.xyz -- --batch_size 8 --predictor none --wandb jepa-flashmd-experiments --wandb_group E11 --wandb_job_type pretrain-nopred
+e11_finetune_nopred_water16_10pct_s0|train|40000|1|configs/e11_finetune_nopred_water16_10pct_s0.yaml
+e11_finetune_nopred_water16_10pct_s1|train|40000|1|configs/e11_finetune_nopred_water16_10pct_s1.yaml
+e11_finetune_nopred_water16_10pct_s2|train|40000|1|configs/e11_finetune_nopred_water16_10pct_s2.yaml

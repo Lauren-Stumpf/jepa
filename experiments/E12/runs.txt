@@ -1,0 +1,5 @@
+# name|kind|min GPU memory (MB)|runs per GPU|spec   (scripts/launch_runs.sh)
+e12_pretrain_plain_gap100_organic8|pretrain|20000|1|CONFIG=configs/flashmd_organic8_scratch.yaml TRAIN=data/organic8_gap100/train.xyz VAL=data/organic8_gap100/val.xyz -- --predictor plain --wandb jepa-flashmd-experiments --wandb_group E12 --wandb_job_type pretrain-gap100
+e12_finetune_plain_gap100_organic8_10pct_s0|train|20000|1|configs/e12_finetune_plain_gap100_organic8_10pct_s0.yaml
+e12_finetune_plain_gap100_organic8_10pct_s1|train|20000|1|configs/e12_finetune_plain_gap100_organic8_10pct_s1.yaml
+e12_finetune_plain_gap100_organic8_10pct_s2|train|20000|1|configs/e12_finetune_plain_gap100_organic8_10pct_s2.yaml

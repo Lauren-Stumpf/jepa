@@ -191,14 +191,20 @@ class Predictor(torch.nn.Module):
       norm_target  one normalising step on the encoder output for BOTH frames, applied
                    outside the predictor (see normalise_embeddings); here guess = f(now)
       residual     guess = now + f(now), with f's last layer started at zero so the
-                   predictor begins as an exact copy and only learns the change"""
+                   predictor begins as an exact copy and only learns the change
+      none         guess = now: no predictor and no parameters. The prediction term is then
+                   the distance between the features now and the features after the gap, so
+                   it only pulls the two together (E11, hypothesis H5)"""
 
-    VARIANTS = ("plain", "norm_input", "norm_target", "residual")
+    VARIANTS = ("plain", "norm_input", "norm_target", "residual", "none")
 
     def __init__(self, d, hidden, variant="norm_target"):
         super().__init__()
         assert variant in self.VARIANTS, variant
         self.variant = variant
+        if variant == "none":
+            self.net = None
+            return
         layers = [torch.nn.Linear(d, hidden), torch.nn.GELU(), torch.nn.Linear(hidden, hidden), torch.nn.GELU(),
                   torch.nn.Linear(hidden, d)]
         if variant in ("norm_input", "residual"):
@@ -209,6 +215,8 @@ class Predictor(torch.nn.Module):
             torch.nn.init.zeros_(self.net[-1].bias)
 
     def forward(self, z):
+        if self.variant == "none":
+            return z
         return z + self.net(z) if self.variant == "residual" else self.net(z)
 
 

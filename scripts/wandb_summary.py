@@ -33,6 +33,8 @@ from wandb_common import (ENTITY, EXPERIMENTS, PROJECT, REPO, TEST_P, TEST_Q, TR
 REFERENCES = {
     "E02": [("E00", "organic8-100ep", "baseline")],
     "E06": [("E04", "baseline", "baseline"), ("E04", "plain", "plain (E04)")],
+    "E11": [("E04", "baseline", "baseline"), ("E04", "plain", "plain (E04)"), ("E06", "regonly", "regulariser only (E06)")],
+    "E12": [("E01", "baseline", "baseline"), ("E01", "plain", "plain, 8 fs gap (E01)")],
 }
 
 MEASURES = [(VAL_P, "Validation momentum error"), (TEST_P, "Test momentum error"),

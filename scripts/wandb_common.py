@@ -32,6 +32,12 @@ EXPERIMENTS = {
     "E04": "Water 16 fs, 10% of the labels: five pretraining variants against the baseline",
     "E05": "Hypothesis A: does the water gain last with ten times more training?",
     "E06": "Hypothesis B: does the water gain come from the regulariser rather than prediction?",
+    "E07": "Hypothesis H1: organic models on unused frames of the training molecules (evaluation only)",
+    "E08": "Hypothesis H2: where encoder features get their spread, and how much they change (measurement only)",
+    "E09": "Hypothesis H3: organic errors split by kind of frame (analysis only)",
+    "E10": "Hypothesis H3: are the organic runs deterministic and energy-conserving? (data check only)",
+    "E11": "Hypothesis H5: water pretraining with no predictor (features now and later pulled together)",
+    "E12": "Hypothesis H2: organic pretraining with pairs 100 fs apart instead of 8 fs",
 }
 
 VARIANTS = ("plain", "normtarget", "resid", "proj", "residrel")
@@ -85,6 +91,14 @@ def classify(name):
         return "E06", "regonly", seed
     if name == "e06_pretrain_regonly_water16":
         return "E06", "pretrain-regonly", 0
+    if re.fullmatch(r"e11_finetune_nopred_water16_10pct_s\d", name):
+        return "E11", "nopred", seed
+    if name == "e11_pretrain_nopred_water16":
+        return "E11", "pretrain-nopred", 0
+    if re.fullmatch(r"e12_finetune_plain_gap100_organic8_10pct_s\d", name):
+        return "E12", "gap100", seed
+    if name == "e12_pretrain_plain_gap100_organic8":
+        return "E12", "pretrain-gap100", 0
     return None
 
 
