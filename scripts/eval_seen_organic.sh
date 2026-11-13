@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # E07 (hypothesis H1): evaluate the 18 organic 10% models (E01) on frames of the TRAINING
 # molecules, using the same command as the test-set evaluation (results/eval/test/run_eval_test.sh).
-#   labelled  positions 0, 40, 80, ...  in data/organic8/train.xyz (in the 10% labelled subset,
-#             which is every frame at a position divisible by 10: data/make_fraction_subset.py)
-#   unused    positions 5, 45, 85, ...  (never in the labelled subset)
+#   labelled     positions 0, 40, 80, ...  in data/organic8/train.xyz (in the 10% labelled subset,
+#                which is every frame at a position divisible by 10: data/make_fraction_subset.py)
+#   unused       positions 5, 45, 85, ...  (never in the labelled subset; all time-reversed copies,
+#                because the file stores each start frame followed by its time-reversed copy)
+#   unused_fwd   positions 2, 42, 82, ...  (never in the labelled subset; forward frames, like the subset)
 # 2,100 frames each, spread over all 168 training molecules. Results go to
 # results/eval/seen/<run>_<set>.{csv,log}; an existing result is never redone.
 #   cd /storage3/lauren/code/jepa && tmux new-session -d -s eval_seen "bash scripts/eval_seen_organic.sh <GPU> >> results/eval/seen/queue.log 2>&1"
@@ -20,8 +22,8 @@ failed=0
 for s in 0 1 2; do
   for r in flashmd_organic8_scratch_10pct_s$s $(for v in plain normtarget resid proj residrel; do echo jepa_finetune_${v}_organic8_10pct_s$s; done); do
     if [ ! -f "results/runs/$r/model.pt" ]; then echo "  $r: no model.pt, skipped"; failed=$((failed + 1)); continue; fi
-    for set in labelled unused; do
-      off=0; [ "$set" = unused ] && off=5
+    for set in labelled unused unused_fwd; do
+      off=0; [ "$set" = unused ] && off=5; [ "$set" = unused_fwd ] && off=2
       o=$OUT/${r}_$set.csv
       [ -f "$o" ] && continue
       echo "$(date '+%F %T') $r on $set frames"

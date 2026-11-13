@@ -546,3 +546,14 @@ metatrain tracks the best-validation model every epoch whatever the interval. Th
 checkpoint selection, if run, works on a 10-epoch grid; it should also include the final
 model.ckpt, because new 100-epoch runs save model_90 as their last numbered file while
 thinned older runs kept model_99.
+
+## 13 Nov 2026: organic file layout
+
+Checked on the data: in data/organic8/*.xyz each start frame (even position within a molecule)
+is followed by its time-reversed copy (positions equal to the start's stored 8 fs future,
+momenta equal to minus its stored future momenta), as the FlashMD file provides. Every stored
+future is correct for its own frame, so all training and evaluation so far is unaffected.
+Consequences: the organic 10% subset (every 10th frame) holds forward frames only, whereas
+the water 10% subset keeps each forward pair with its reversed copy (one more difference
+between the two systems, same for both arms within each); E07 adds a forward-only unused set;
+E08 measures forward frames only; E12 pairs reversed copies along their own direction of time.

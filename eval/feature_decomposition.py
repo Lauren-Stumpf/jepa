@@ -15,8 +15,10 @@ pretraining used (E08, hypothesis H2). Same measurements for organic and water e
    and the same within each element. 0 means the features do not move.
 
 Data, never used for training by any encoder measured:
-  organic  data/organic8/val.xyz (21 molecules, 500 frames each, grouped); every --every-th
-           frame; "later" is the frame's stored 8 fs future. Atom identity = (molecule, index).
+  organic  data/organic8/val.xyz (21 molecules, 500 frames each); every --every-th frame, forward
+           frames only (the file stores each start frame followed by its time-reversed copy);
+           "later" is the frame's stored 8 fs future. Atom identity = (molecule, index), with
+           molecule ids from data/organic8/frames.csv.
   water    the raw constant-energy runs of the validation split (data/water/pairs/16fs/
            manifest.json), start frames every --spacing fs; "later" is 8 and 16 fs on.
            Atom identity = (run, index).
@@ -36,6 +38,7 @@ import sys
 
 import ase.io
 import numpy as np
+import pandas as pd
 import torch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -46,12 +49,20 @@ from train.pretrain_jepa import load_config  # noqa: E402
 DT_FS = 0.25
 
 
-def organic_frames(path, masses, every, group_frames=500):
-    """(groups, now, later): per sampled frame its group id, (types, q, p, cell) now and 8 fs later."""
+def organic_frames(path, masses, every, frames_csv="data/organic8/frames.csv", split="val"):
+    """(groups, now, later): per sampled frame its molecule id, (types, q, p, cell) now and 8 fs later.
+    Only forward frames are used (even positions within a molecule; each is followed in the file
+    by its time-reversed copy, which is skipped): water frames come from raw forward runs, so
+    both systems are measured on forward dynamics only. Molecule ids come from frames.csv."""
+    rows = pd.read_csv(frames_csv)
+    rows = rows[(rows.split == split) & (rows.written == 1)].reset_index(drop=True)
+    rel = (rows.frame - rows.groupby("group").frame.transform("min")).to_numpy()
+    assert every % 2 == 0, "--every must be even so that only forward frames are taken"
     groups, now, later = [], [], []
     for i, a in enumerate(ase.io.iread(path, index=":", format="extxyz")):
         if i % every:
             continue
+        assert rel[i] % 2 == 0, f"frame {i} is not a forward frame"
         m = np.array([masses[int(z)] for z in a.numbers])
         sm = np.sqrt(m)[:, None]
         q = a.get_positions()
@@ -59,7 +70,7 @@ def organic_frames(path, masses, every, group_frames=500):
         p_fut = a.arrays["future_momenta"] * sm
         types = torch.tensor(a.numbers, dtype=torch.int32)
         cell = torch.tensor(a.cell.array)
-        groups.append(i // group_frames)
+        groups.append(int(rows.group[i]))
         now.append((types, torch.tensor(q), torch.tensor(a.get_momenta()), cell))
         later.append({8: (types, torch.tensor(q_fut), torch.tensor(p_fut), cell)})
     return groups, now, later
@@ -86,7 +97,7 @@ def water_frames(runs_root, run_names, spacing_fs, gaps=(8, 16)):
 
 def spread_split(h_list, groups, types_list):
     """Shares of the total sum of squares from element, atom and moment parts."""
-    H = np.concatenate(h_list)                                        # all atom-frames
+    H = np.concatenate(h_list).astype(np.float64)                     # all atom-frames
     Z = np.concatenate([t.numpy() for t in types_list])
     total = ((H - H.mean(0)) ** 2).sum()
     elem_mean = {z: H[Z == z].mean(0) for z in np.unique(Z)}
@@ -95,7 +106,7 @@ def spread_split(h_list, groups, types_list):
     atom = moment = 0.0
     for g in sorted(set(groups)):
         idx = [k for k, gg in enumerate(groups) if gg == g]
-        stack = np.stack([h_list[k] for k in idx])                    # frames x atoms x d
+        stack = np.stack([h_list[k] for k in idx]).astype(np.float64)  # frames x atoms x d
         t = types_list[idx[0]].numpy()
         assert all(np.array_equal(types_list[k].numpy(), t) for k in idx), f"group {g}: atoms differ between frames"
         a_mean = stack.mean(0)                                        # atoms x d
@@ -124,7 +135,7 @@ def main():
     ap.add_argument("config")
     ap.add_argument("--encoders", nargs="+", required=True, help="name=kind:path")
     ap.add_argument("--organic_file", default="data/organic8/val.xyz")
-    ap.add_argument("--every", type=int, default=5)
+    ap.add_argument("--every", type=int, default=10, help="organic: every this many frames (even: forward frames only)")
     ap.add_argument("--water_runs", default="/storage3/lauren/data/water")
     ap.add_argument("--water_manifest", default="data/water/pairs/16fs/manifest.json")
     ap.add_argument("--spacing", type=float, default=100.0)

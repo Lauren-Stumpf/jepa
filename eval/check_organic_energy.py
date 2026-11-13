@@ -35,7 +35,7 @@ def main():
     keep = fr[fr.written == 1].frame.to_numpy()
     d = cat.set_index("frame").loc[keep].reset_index()
     d["e_tot"] = 1.5 * ase.units.kB * d.kinetic_T_K + d.pe_eV_atom
-    d["block"] = d.frame // RUN_FRAMES
+    d["block"] = d.group.astype(np.int64) * 1000 + (d.frame - d.groupby("group").frame.transform("min")) // RUN_FRAMES
     blocks = d.groupby("block").agg(n=("frame", "size"), group=("group", "first"), groups=("group", "nunique"),
                                     spread=("e_tot", lambda e: e.max() - e.min()),
                                     drift=("e_tot", lambda e: e.iloc[-1] - e.iloc[0]),

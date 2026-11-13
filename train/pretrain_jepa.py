@@ -315,7 +315,7 @@ def main():
     ap.add_argument("--w_cov", type=float, default=1.0)
     ap.add_argument("--pred_hidden", type=int, default=1024)
     ap.add_argument("--predictor", default="norm_target", choices=Predictor.VARIANTS,
-                    help="plain | norm_input (first run's design) | norm_target (I-JEPA style, default) | residual")
+                    help="plain | norm_input (first run's design) | norm_target (I-JEPA style, default) | residual | none (no predictor)")
     ap.add_argument("--residual_predictor", action="store_true", help="same as --predictor residual")
     ap.add_argument("--relative_loss", action="store_true",
                     help="prediction error divided by the error of plain copying (so it is inv/trivial itself)")
@@ -366,6 +366,9 @@ def main():
     else:
         proj = torch.nn.Identity()
         d_loss = d
+    assert not (args.residual_predictor and args.predictor == "none"), "--residual_predictor contradicts --predictor none"
+    assert not (args.relative_loss and args.predictor == "none"), \
+        "--relative_loss with --predictor none makes the prediction term a constant 1 (no gradient): the run would be regulariser-only"
     variant = "residual" if args.residual_predictor else args.predictor
     pred = Predictor(d_loss, args.pred_hidden, variant=variant).to(device=device, dtype=dtype)
     # for norm_target the normalising step sits at the encoder output, for both frames

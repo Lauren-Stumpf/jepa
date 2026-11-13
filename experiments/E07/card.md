@@ -11,23 +11,25 @@ Status: agreed (13 Nov 2026). No training: the existing E01 models are evaluated
 - If H1 is false: the pretrained arms are worse than the baseline on unused frames too, by about as much as on the test set (plain 4% worse).
 - My confidence that H1 is true: 55%.
 
-**Varied:** the frames the models are evaluated on. Three sets:
+**Varied:** the frames the models are evaluated on. Four sets:
 
-| Set | Molecule seen in pretraining? | Frame in the 10% labelled subset? |
-|---|---|---|
-| Labelled frames | yes | yes |
-| Unused frames | yes | no |
-| Test set (already measured) | no | no |
+| Set | Molecule seen in pretraining? | Frame in the 10% labelled subset? | Direction |
+|---|---|---|---|
+| Labelled frames | yes | yes | forward |
+| Unused, forward | yes | no | forward |
+| Unused, reversed | yes | no | time-reversed copy |
+| Test set (already measured) | no | no | both, alternating |
 
-- Labelled frames: positions 0, 40, 80, ... in data/organic8/train.xyz (every frame at a position divisible by 10 is in the 10% subset).
-- Unused frames: positions 5, 45, 85, ... (never in the subset). 2,100 frames each, spread over all 168 training molecules (the file is grouped by molecule, 500 frames each).
+- The organic files store each start frame (forward, even position) followed by its time-reversed copy (positions 8 fs later, momenta flipped; checked on 13 Nov). The 10% subset is every 10th frame, so it holds forward frames only.
+- Labelled: positions 0, 40, 80, ... in data/organic8/train.xyz. Unused forward: positions 2, 42, 82, ... Unused reversed: positions 5, 45, 85, ... (added before any result was read: the reversed set was the first choice, the forward set was added on 13 Nov when the layout was found). 2,100 frames each, spread over all 168 training molecules.
+- The primary comparison is unused forward against the test set; unused reversed shows whether direction matters.
 
 **Matched:** the evaluation command is the one used for the test set (eval/eval_onestep.py, mass-scaled targets, 2,100 frames, the organic config's masses).
 
 **Fixed:** the 18 E01 models, unchanged: baseline, plain, normalised target, residual, projector and relative loss, seeds 0, 1, 2.
 
 **Controls:**
-- Must work (frame selection): the frame numbers the evaluation records are all divisible by 10 for labelled frames and all end in 5 for unused frames. Checked from each result file before reading any error.
+- Must work (frame selection): the frame numbers the evaluation records are all divisible by 10 for labelled frames, all end in 2 for unused forward frames and all end in 5 for unused reversed frames. Checked from each result file before reading any error.
 - Must work (subset): data/organic8/train_10pct.xyz has 8,400 frames and its second frame equals frame 10 of train.xyz.
 - Expected, not a pass/fail test: error on labelled frames at or below error on unused frames, and both below the test set. Labelled and unused frames are neighbours in the same runs, so the first two may be nearly equal.
 - Reference: the straight-line guess, printed by the evaluation for each set.
@@ -41,7 +43,7 @@ Status: agreed (13 Nov 2026). No training: the existing E01 models are evaluated
 - Primary measure: momentum error per arm, mean of three seeds, on unused frames, as a percentage against the baseline; compared with the same percentage on the test set.
 - A difference counts if every seed of one arm beats every seed of the other (proposed 13 Nov; the older rule, a difference larger than three times the larger seed spread, is reported too).
 
-**Runs:** 36 evaluations (18 models × 2 sets), about 1 minute each on one GPU. Script: scripts/eval_seen_organic.sh.
+**Runs:** 54 evaluations (18 models × 3 sets), about 1 minute each on one GPU. Script: scripts/eval_seen_organic.sh.
 
 ## Result
 (to be filled in)

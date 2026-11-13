@@ -47,7 +47,7 @@ def pooled(df, col="rmse_dp_massscaled"):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--set", choices=["test", "unused", "labelled"], required=True)
+    ap.add_argument("--set", choices=["test", "unused", "unused_fwd", "labelled"], required=True)
     ap.add_argument("--frames_csv", default="data/organic8/frames.csv")
     ap.add_argument("--out", default="")
     args = ap.parse_args()
@@ -78,14 +78,19 @@ def main():
             assert (info.formula.map(formula_key) == d.formula.map(formula_key)).all(), f"{path}: formula mismatch"
             d["kind"] = [kinds(x) for x in info.itertuples()]
             d["tband"] = [tband(t) for t in info.kinetic_T_K]
+            rel = info.frame.to_numpy() - rows.groupby("group").frame.transform("min").to_numpy()[d.frame.to_numpy()]
+            d["direction"] = np.where(rel % 2 == 0, "forward", "reversed")
             if not counts_done:
                 res["frames_by_kind"] = d.kind.value_counts().to_dict()
                 res["frames_by_tband"] = d.tband.value_counts().to_dict()
+                res["frames_by_direction"] = d.direction.value_counts().to_dict()
                 counts_done = True
             out = {"all": pooled(d)}
             for k, g in d.groupby("kind"):
                 out[k] = pooled(g)
             for k, g in d.groupby("tband"):
+                out[k] = pooled(g)
+            for k, g in d.groupby("direction"):
                 out[k] = pooled(g)
             per_seed.append(out)
         keys = per_seed[0].keys()

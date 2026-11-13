@@ -19,7 +19,7 @@ Status: agreed (13 Nov 2026). Measurement only, no training.
 - Organic: untrained; trained baseline (flashmd_organic8_scratch_10pct_s0); the five E01 pretrainings.
 - Water: untrained; trained baseline (flashmd_water16_scratch_10pct_s0); the five E04 pretrainings; the regulariser-only pretraining (E06).
 
-**Fixed:** frames no encoder was trained on. Organic: data/organic8/val.xyz, every 5th frame (2,100 frames, 21 molecules). Water: the raw runs of the validation split, a start every 100 fs (14 runs).
+**Fixed:** frames no encoder was trained on. Organic: data/organic8/val.xyz, every 10th frame, which are forward frames only (1,050 frames, 50 per molecule, 21 molecules). Water: the raw runs of the validation split, a start every 100 fs (14 runs).
 
 **Controls:**
 - Must work: the three shares add to 1.000 for every encoder.
@@ -27,7 +27,7 @@ Status: agreed (13 Nov 2026). Measurement only, no training.
 
 **Assumptions:**
 1. "Which atom" is defined within one molecule (organic) or one run (water). In water, molecules move around during a 2 ps run, so an atom's own average drifts towards its element's average; this is part of what H2 says about water, not a flaw, but the water atom share depends on run length.
-2. The water frames include no time-reversed copies (raw runs are used), the organic frames do not either (val.xyz, stored futures).
+2. Both systems are measured on forward frames only: water from raw runs, organic skipping the stored time-reversed copies (which have flipped momenta and would add spread that is not motion).
 
 **Measure and rule:** the shares and changes per encoder, compared between organic and water pretrained encoders, with the untrained and trained baselines as references. No seeds: one encoder each.
 

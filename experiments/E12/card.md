@@ -11,7 +11,7 @@ Status: agreed (13 Nov 2026).
 - If H2 is false: they land at or above E01 plain.
 - My confidence that H2 is true: 30%.
 
-**Varied:** only the gap of the pretraining pairs: 8 fs (E01 plain) against 100 fs (this experiment). The pairs come from the same organic training frames: each frame paired with the frame two places later in the same constant-energy run (data/make_gap_pairs.py), which is 100 fs later.
+**Varied:** only the gap of the pretraining pairs: 8 fs (E01 plain) against 100 fs (this experiment). The pairs come from the same organic training frames (data/make_gap_pairs.py): each forward start frame is paired with the next start frame of the same constant-energy run (100 fs later), and each stored time-reversed copy with the previous reversed copy (100 fs later along its own reversed time), so the time-reversal augmentation of E01's pretraining is kept.
 
 **Matched:** everything else as E01 plain pretraining: plain predictor, weights 25/25/1, 20 epochs, batch 64 pairs, seed 0, all 168 training molecules; fine-tuning exactly as E01 (8 fs, 10% of the labels, 100 epochs, seeds 0, 1, 2).
 
@@ -22,7 +22,7 @@ Status: agreed (13 Nov 2026).
 
 **Assumptions:**
 1. Start frames in a run are 100 fs apart (notes/decisions.md); the 50-frame runs are confirmed by constant energy (E10).
-2. About 4% fewer pretraining pairs than at 8 fs (the last two frames of each 50-frame run have no partner 100 fs later); counted in the data manifest.
+2. 4% fewer pretraining pairs than at 8 fs (in each 50-frame run, the last forward frame and the first reversed copy have no partner); counted in the data manifest. Pairs whose atoms move more than half the box are excluded and counted by temperature, so any bias towards cooler frames is visible.
 3. 100 fs is one choice; organic motion at 100 fs includes several bond vibrations, so the future is still determined (constant-energy runs) but much less like the present.
 
 **Measure and rule:** test momentum error, mean of three seeds, against both references. A difference counts if every seed of one arm beats every seed of the other.
