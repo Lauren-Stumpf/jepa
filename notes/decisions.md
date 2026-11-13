@@ -557,3 +557,11 @@ Consequences: the organic 10% subset (every 10th frame) holds forward frames onl
 the water 10% subset keeps each forward pair with its reversed copy (one more difference
 between the two systems, same for both arms within each); E07 adds a forward-only unused set;
 E08 measures forward frames only; E12 pairs reversed copies along their own direction of time.
+
+## 13 Nov 2026: why pretraining helps water and not organic, first round of tests
+
+- H1 (seen against new systems, E07): partly true, small. New molecules cost pretraining 2 to 4 points, but on seen molecules organic pretraining still gives no gain (plain, relative loss) or is worse.
+- H2 (organic features describe atom identity, E08): not supported. Pretrained encoders in both systems make slow features (0.4 to 2% change over the gap) that differ mostly between moments.
+- H3 noise (E10): rejected. Organic runs are deterministic and energy-conserving except about 0.1% of very hot runs.
+- H3 extreme frames (E09): rejected as the main cause. Deficit is nearly as large on normal frames; broken-molecule frames are hurt more but are 2% of frames.
+- Running: E11 (water, no predictor, H5) and E12 (organic, pretraining pairs 100 fs apart).

@@ -46,10 +46,28 @@ Status: agreed (13 Nov 2026). No training: the existing E01 models are evaluated
 **Runs:** 54 evaluations (18 models × 3 sets), about 1 minute each on one GPU. Script: scripts/eval_seen_organic.sh.
 
 ## Result
-(to be filled in)
+Run 13 Nov (results/eval/errors_by_frame_type_*.json). Momentum error, mean of three seeds, percentage against the baseline on the same frames:
+
+| Arm | Labelled frames | Unused, forward | Unused, reversed | Test (new molecules) |
+|---|---|---|---|---|
+| Baseline | 0.0175 | 0.0201 | 0.0197 | 0.0226 |
+| Plain | -4.0% | +0.3% | -0.3% | +3.7% |
+| Relative loss | -4.6% | +0.8% | +1.0% | +4.2% |
+| Normalised target | +4.0% | +3.4% | +4.4% | +6.6% |
+| Residual | +4.3% | +4.3% | +5.9% | +6.8% |
+| Projector | +17.2% | +17.2% | +15.4% | +19.0% |
+
+By the seed rule (every seed of one arm beats every seed of the other): on the test set every variant is worse than the baseline; on unused frames of the training molecules plain and relative loss overlap the baseline (no difference), and the other three are still worse.
+
+H1 is partly supported and does not explain the organic-against-water difference:
+- New molecules do cost pretraining something: each variant's deficit is 2 to 4 points larger on new molecules than on unused frames of seen molecules.
+- But on seen molecules, organic pretraining gives no gain at best (plain, relative loss) and is still worse for the other variants. On water, the same variants give 12 to 28% gains. So "the water test is the same system" accounts for a few points, not for the 15 to 30 point difference between the systems.
+- Forward and reversed unused frames give the same picture, so direction does not matter.
 
 ## Assumptions check
-(to be filled in)
+- Frame selection control passed: all 54 result files have 2,100 frames with the expected frame numbers.
+- Error order as expected: labelled below unused below test for every arm.
+- Assumption 2 (pretraining saw the unused frames) favours the pretrained arms on unused frames; even with that advantage they gain nothing.
 
 ## Next
-(to be filled in)
+H1 is not the main cause. Remaining candidates: what slow features are worth for each labelled task (E11 on water; E12 forces faster features on organic), and the other differences between the systems (labelled set size: 8,400 organic pairs against 896 water pairs; one liquid against many molecules).

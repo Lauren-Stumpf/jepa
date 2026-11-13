@@ -28,10 +28,21 @@ Status: agreed (13 Nov 2026). Analysis of existing results only.
 **Runs:** eval/errors_by_frame_type.py on the test set and on the unused frames (after E07 finishes).
 
 ## Result
-(to be filled in)
+Run 13 Nov (results/eval/errors_by_frame_type_test.json and _unused_fwd.json). Test set, percentage against the baseline (mean of three seeds):
+
+| Arm | All | Normal (2,049 frames) | Apart (51) | Below 500 K | 500 to 1,000 K | Above 1,000 K |
+|---|---|---|---|---|---|---|
+| Plain | +3.7% | +3.4% | +8.7% | +4.0% | +2.8% | +4.0% |
+| Normalised target | +6.6% | +6.1% | +14.4% | +7.9% | +6.8% | +5.9% |
+| Residual | +6.8% | +5.8% | +22.5% | +7.0% | +5.9% | +7.2% |
+| Projector | +19.0% | +18.0% | +35.2% | +21.2% | +19.0% | +18.1% |
+| Relative loss | +4.2% | +3.5% | +15.5% | +5.1% | +3.0% | +4.5% |
+
+The prediction for "H3 (extreme frames) is true" failed: on normal frames the deficit is nearly the full overall deficit (plain +3.4% against +3.7%). Pretrained models are clearly worse on frames where the molecule has come apart (two to three times the deficit), but there are too few such frames (51) to cause the overall result. Temperature makes no consistent difference. The test set has no own-image frames. On unused frames of the training molecules the pattern is the same.
 
 ## Assumptions check
-(to be filled in)
+- The mapping control passed (formula check on every frame; the overall baseline error 0.0226 matches E01).
+- The apart category has 51 frames on test, just above the 50-frame minimum set on the card; its percentages are noisy.
 
 ## Next
-(to be filled in)
+H3 (extreme frames) is rejected as the main cause. Pretraining handling broken molecules badly is noted, but it is a small part of the error.
