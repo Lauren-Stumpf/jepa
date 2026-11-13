@@ -44,8 +44,8 @@ EPOCH_RE = re.compile(
 
 
 def classify(name):
-    """(experiment, arm, seed) for a run folder name from before the experiment project
-    existed, or None for folders that are not imported (smoke tests, untrained encoders,
+    """(experiment, arm, seed) for a run folder name (E05 and E06 runs log to the experiment
+    project themselves; they are listed so their logs can be imported if the live run failed), or None for folders that are not imported (smoke tests, untrained encoders,
     stage 2 of heads-first, which is merged into its stage 1 run)."""
     m = re.search(r"_s(\d)$", name)
     seed = int(m.group(1)) if m else 0
@@ -78,6 +78,13 @@ def classify(name):
     m = re.fullmatch(r"jepa_pretrain_([a-z]+)_water16", name)
     if m and m.group(1) in VARIANTS:
         return "E04", f"pretrain-{m.group(1)}", 0
+    m = re.fullmatch(r"e05_(baseline|plain|normtarget)_water16_10pct_1000ep_s\d", name)
+    if m:
+        return "E05", m.group(1), seed
+    if re.fullmatch(r"e06_finetune_regonly_water16_10pct_s\d", name):
+        return "E06", "regonly", seed
+    if name == "e06_pretrain_regonly_water16":
+        return "E06", "pretrain-regonly", 0
     return None
 
 
