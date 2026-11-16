@@ -47,6 +47,17 @@ from eval.feature_change_vs_jump import features  # noqa: E402
 from train.pretrain_jepa import build_model, load_config  # noqa: E402
 
 
+def same(x, y):
+    """Bitwise equality, counting NaN as equal to NaN (the masses buffer holds NaN for atomic
+    numbers that are not used), as in train/last_epoch_checkpoint.py."""
+    x, y = x.cpu(), y.cpu()
+    if x.shape != y.shape or x.dtype != y.dtype:
+        return False
+    if x.is_floating_point():
+        return torch.allclose(x, y, rtol=0, atol=0, equal_nan=True)
+    return torch.equal(x, y)
+
+
 def target_free(model_hypers, dataset_info, masses, timestep):
     model = build_model(model_hypers, dataset_info, masses, timestep).to(dtype=torch.float32)
     for additive in model.additive_models:
@@ -85,9 +96,9 @@ def main():
     model.load_state_dict(shared, strict=False)
     after = model.state_dict()
     for k in shared:
-        assert torch.equal(after[k].cpu(), sd[k].cpu()), f"tensor {k} differs after copying"
+        assert same(after[k], sd[k]), f"tensor {k} differs after copying"
     for k in missing:
-        assert torch.equal(after[k].cpu(), own[k].cpu()), f"tensor {k} was changed although it should keep its default"
+        assert same(after[k], own[k]), f"tensor {k} was changed although it should keep its default"
     print(f"copied {len(shared)} encoder tensors from {args.source}; left at their defaults: "
           f"{len(missing)} scaler and additive-model tensors")
 
@@ -104,7 +115,7 @@ def main():
         # get_checkpoint() puts finetune_config into model_state_dict only, so compare without it
         a = {k: v for k, v in saved["best_model_state_dict"].items() if k != "finetune_config"}
         b = {k: v for k, v in saved["model_state_dict"].items() if k != "finetune_config"}
-        assert a.keys() == b.keys() and all(torch.equal(a[k], b[k]) for k in a), \
+        assert a.keys() == b.keys() and all(same(a[k], b[k]) for k in a), \
             "best_model_state_dict and model_state_dict of the saved checkpoint differ"
         reload_sd = a
     else:
