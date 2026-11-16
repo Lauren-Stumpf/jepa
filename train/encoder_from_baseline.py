@@ -91,12 +91,22 @@ def main():
     missing = [k for k in own if k not in shared]
     bad_missing = [k for k in missing if head_free(k)]
     assert not bad_missing, f"encoder weights missing from {args.source}: {bad_missing[:5]}"
+    # Weights (parameters) must match the model's precision exactly. Buffers that hold settings
+    # from the config (for example the time step, stored as a whole number by the trainer and as a
+    # decimal here, and the masses) may differ in storage type, but their values must equal both
+    # the source and the value this script built from the config.
+    params = {name for name, _ in model.named_parameters()}
     for k, v in shared.items():
-        assert v.dtype == own[k].dtype, f"tensor {k}: source dtype {v.dtype}, model dtype {own[k].dtype}"
+        if k in params:
+            assert v.dtype == own[k].dtype, f"weight {k}: source dtype {v.dtype}, model dtype {own[k].dtype}"
+        else:
+            assert same(v.to(own[k].dtype), own[k]), \
+                f"setting {k}: source value differs from the value built from {args.config}"
     model.load_state_dict(shared, strict=False)
     after = model.state_dict()
     for k in shared:
-        assert same(after[k], sd[k]), f"tensor {k} differs after copying"
+        ref = sd[k] if k in params else sd[k].to(after[k].dtype)
+        assert same(after[k], ref), f"tensor {k} differs after copying"
     for k in missing:
         assert same(after[k], own[k]), f"tensor {k} was changed although it should keep its default"
     print(f"copied {len(shared)} encoder tensors from {args.source}; left at their defaults: "
