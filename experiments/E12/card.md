@@ -30,7 +30,7 @@ Status: agreed (13 Nov 2026).
 **Runs:** data preparation (minutes), 1 pretraining (about 7 hours on a 24 GB card), 3 fine-tunes (about 5.5 hours each). See `runs.txt`.
 
 ## Result
-Validation only so far (16 Nov; the test evaluation is still to run). Validation momentum error, three seeds:
+Test set (16 Nov): 100 fs gap 0.0230, 0.0239, 0.0232 (mean 0.0234), the same as plain at 8 fs (0.0234) and worse than the baseline (0.0226). Validation agrees: Validation momentum error, three seeds:
 
 | Arm | Seeds | Mean |
 |---|---|---|
@@ -46,4 +46,4 @@ The 100 fs arm overlaps the 8 fs arm, and every one of its seeds is worse than e
 - As in E01, pretraining saw all 84,000 frames and the baseline 8,400 (see the note in E11).
 
 ## Next
-Test evaluation. A longer gap is not pursued further for now.
+A longer gap is not pursued further for now.

@@ -70,10 +70,10 @@ Runs: <list, or see runs.txt>; cost: <GPU hours>
 | E08 | Where encoder features get their spread, and how much they change over the gap | done |
 | E09 | Organic errors split by kind of frame | done |
 | E10 | Are the organic runs deterministic and energy-conserving? | done |
-| E11 | Water pretraining with no predictor | run; validation only, test evaluation to do |
-| E12 | Organic pretraining with pairs 100 fs apart | run; validation only, test evaluation to do |
-| E13 | Water pretraining on only the frames the baseline sees | proposed |
-| E14 | Control that must work: full-data organic encoder through the checkpoint route | proposed |
+| E11 | Water pretraining with no predictor | done |
+| E12 | Organic pretraining with pairs 100 fs apart | done |
+| E13 | Water pretraining on only the frames the baseline sees | running |
+| E14 | Control that must work: full-data organic encoder through the checkpoint route | running |
 | E15 | Organic pretraining on only the frames the baseline sees (plain and no predictor) | proposed |
 
 Note (16 Nov 2026): in E01, E04, E05, E06, E11 and E12 the pretrained arm was pretrained on all training frames and the baseline saw 10% of them, so those comparisons are confounded with extra data. See notes/decisions.md and experiments/INSTRUCTIONS_E13_E15.md.

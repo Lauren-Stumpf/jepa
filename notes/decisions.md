@@ -572,3 +572,8 @@ E11 (water, no predictor): validation momentum 0.0220 against baseline 0.0303 an
 
 Confound (raised by Lauren): in E01, E04, E05, E06, E11 and E12 the pretrained arm was pretrained on all training frames (84,000 organic, 8,960 water) and trained with labels on 10% of them, while the baseline saw only the 10%. The label is the later frame, and pretraining uses the later frame too, so the pretrained arm saw 10 times more data of the same kind. The water gain is therefore confounded with extra data; on organic even the extra data did not help. For scale: the water baseline with labels on all 8,960 frames reaches 0.0038, against 0.0063 for pretraining on all frames plus labels on 896 (1,000 epochs) and 0.0074 for the baseline on 896.
 Next (cards written, not run): E13 water pretraining on the 896 frames only; E14 a control that must work (encoder of the full-data organic baseline through the same route); E15 organic pretraining on the 8,400 frames only, plain and no predictor, 3 seeds. Instructions for the implementing agent: experiments/INSTRUCTIONS_E13_E15.md.
+
+## 16 Nov 2026: E11 and E12 test results; E13 and E14 started
+
+Test momentum error: E11 no predictor (water) 0.0220 against baseline 0.0303 and plain 0.0268; E12 100 fs gap (organic) 0.0234, the same as 8 fs (0.0234), baseline 0.0226. Both still carry the extra-frames confound.
+E14 encoder conversion checked on the real checkpoint (161 encoder tensors copied, features identical to the source model). E13 (4 pretrainings, 12 training runs) and E14 (3 runs) launched; E15 waits for E14. Checkpoint thinning: 623 files, 247 GB.
