@@ -30,10 +30,20 @@ Status: agreed (13 Nov 2026).
 **Runs:** data preparation (minutes), 1 pretraining (about 7 hours on a 24 GB card), 3 fine-tunes (about 5.5 hours each). See `runs.txt`.
 
 ## Result
-(to be filled in)
+Validation only so far (16 Nov; the test evaluation is still to run). Validation momentum error, three seeds:
+
+| Arm | Seeds | Mean |
+|---|---|---|
+| Baseline (E01) | 0.0238, 0.0237, 0.0240 | 0.0238 |
+| Plain, 8 fs gap (E01) | 0.0246, 0.0243, 0.0247 | 0.0245 |
+| Plain, 100 fs gap (this experiment) | 0.0244, 0.0245, 0.0244 | 0.0244 |
+
+The 100 fs arm overlaps the 8 fs arm, and every one of its seeds is worse than every baseline seed. The prediction for "H2 is true" failed.
 
 ## Assumptions check
-(to be filled in)
+- Pair file: 80,620 of 84,000 frames paired; 3,030 excluded at run ends (as expected, about 4%), 330 with the partner in another split, 20 for an energy difference (15 of them above 1,000 K). No pair was excluded for moving too far.
+- Control "copying error clearly larger than at 8 fs": copying error on validation was 0.0074 against 0.0042 at 8 fs, less than twice as large, and the predictor was still worse than copying (ratio 1.26 against 1.19). The longer gap made the task only a little harder.
+- As in E01, pretraining saw all 84,000 frames and the baseline 8,400 (see the note in E11).
 
 ## Next
-(to be filled in)
+Test evaluation. A longer gap is not pursued further for now.

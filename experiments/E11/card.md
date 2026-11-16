@@ -29,10 +29,20 @@ Status: agreed (13 Nov 2026).
 **Runs:** 1 pretraining (about 3.5 hours on a 24 GB card) and 3 fine-tunes (about 1 hour each on a 46 GB card). See `runs.txt`. Test evaluation as for E04 to E06.
 
 ## Result
-(to be filled in)
+Validation only so far (16 Nov; the test evaluation is still to run). Validation momentum error, three seeds:
+
+| Arm | Seeds | Mean | Against baseline |
+|---|---|---|---|
+| Baseline (E04) | 0.0309, 0.0286, 0.0312 | 0.0303 | |
+| Regulariser only (E06) | 0.0317, 0.0291, 0.0289 | 0.0299 | 1% better |
+| Plain (E04) | 0.0274, 0.0260, 0.0271 | 0.0268 | 12% better |
+| No predictor (this experiment) | 0.0218, 0.0218, 0.0223 | 0.0220 | 27% better |
+
+Every no-predictor seed is below every seed of plain and of the baseline. The prediction "lands in the plain range" was too cautious: it is better than plain.
 
 ## Assumptions check
-(to be filled in)
+- The pretraining did not collapse (effective rank 507, no dead features) and its prediction-over-copying ratio was 1.000, as required.
+- Found on 16 Nov, applies to this experiment and to E04, E05, E06: the pretraining used all 8,960 training frames, the baseline 896. Since the label is the later frame and pretraining uses the later frame too, the pretrained arm saw 10 times more data. The gain here is confounded with extra data. E13 repeats this with pretraining on the 896 frames only.
 
 ## Next
-(to be filled in)
+Test evaluation; E13.

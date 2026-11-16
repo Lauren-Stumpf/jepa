@@ -63,6 +63,17 @@ Runs: <list, or see runs.txt>; cost: <GPU hours>
 | E01 | Organic, 10% of the labels: five pretraining variants against the baseline | done (card written afterwards) |
 | E02 | Organic, all the labels: normalised-target pretraining against the baseline | done (card written afterwards) |
 | E03 | Organic, 10% of the labels: freezing the encoder at the start of fine-tuning | done |
-| E04 | Water 16 fs, 10% of the labels: five pretraining variants against the baseline | running (card written afterwards) |
-| E05 | Hypothesis A: does the water gain last with ten times more training? | agreed |
-| E06 | Hypothesis B: does the water gain come from the regulariser rather than prediction? | agreed |
+| E04 | Water 16 fs, 10% of the labels: five pretraining variants against the baseline | done (card written afterwards) |
+| E05 | Hypothesis A: does the water gain last with ten times more training? | done |
+| E06 | Hypothesis B: does the water gain come from the regulariser rather than prediction? | done |
+| E07 | Organic models on unused frames of the training molecules (seen against new molecules) | done |
+| E08 | Where encoder features get their spread, and how much they change over the gap | done |
+| E09 | Organic errors split by kind of frame | done |
+| E10 | Are the organic runs deterministic and energy-conserving? | done |
+| E11 | Water pretraining with no predictor | run; validation only, test evaluation to do |
+| E12 | Organic pretraining with pairs 100 fs apart | run; validation only, test evaluation to do |
+| E13 | Water pretraining on only the frames the baseline sees | proposed |
+| E14 | Control that must work: full-data organic encoder through the checkpoint route | proposed |
+| E15 | Organic pretraining on only the frames the baseline sees (plain and no predictor) | proposed |
+
+Note (16 Nov 2026): in E01, E04, E05, E06, E11 and E12 the pretrained arm was pretrained on all training frames and the baseline saw 10% of them, so those comparisons are confounded with extra data. See notes/decisions.md and experiments/INSTRUCTIONS_E13_E15.md.

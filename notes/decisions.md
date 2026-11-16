@@ -565,3 +565,10 @@ E08 measures forward frames only; E12 pairs reversed copies along their own dire
 - H3 noise (E10): rejected. Organic runs are deterministic and energy-conserving except about 0.1% of very hot runs.
 - H3 extreme frames (E09): rejected as the main cause. Deficit is nearly as large on normal frames; broken-molecule frames are hurt more but are 2% of frames.
 - Running: E11 (water, no predictor, H5) and E12 (organic, pretraining pairs 100 fs apart).
+
+## 16 Nov 2026: E11, E12, and a confound in every "10% of labels" comparison
+
+E11 (water, no predictor): validation momentum 0.0220 against baseline 0.0303 and plain 0.0268; every seed beats every seed of both. E12 (organic, pretraining pairs 100 fs apart): 0.0244 against 0.0245 at 8 fs and baseline 0.0238; no change. Test evaluations still to run.
+
+Confound (raised by Lauren): in E01, E04, E05, E06, E11 and E12 the pretrained arm was pretrained on all training frames (84,000 organic, 8,960 water) and trained with labels on 10% of them, while the baseline saw only the 10%. The label is the later frame, and pretraining uses the later frame too, so the pretrained arm saw 10 times more data of the same kind. The water gain is therefore confounded with extra data; on organic even the extra data did not help. For scale: the water baseline with labels on all 8,960 frames reaches 0.0038, against 0.0063 for pretraining on all frames plus labels on 896 (1,000 epochs) and 0.0074 for the baseline on 896.
+Next (cards written, not run): E13 water pretraining on the 896 frames only; E14 a control that must work (encoder of the full-data organic baseline through the same route); E15 organic pretraining on the 8,400 frames only, plain and no predictor, 3 seeds. Instructions for the implementing agent: experiments/INSTRUCTIONS_E13_E15.md.
