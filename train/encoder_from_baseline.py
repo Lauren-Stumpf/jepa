@@ -27,6 +27,9 @@ Checks, all of which stop the script if they fail:
      as the SOURCE model itself (rebuilt from the source checkpoint's own model_data with its heads,
      loaded strictly), on a few frames of the training file.
 
+The source checkpoint is read with torch.load directly (no metatrain version upgrade), which is
+right for checkpoints written by the training environment's metatrain (2026.4.1), as all of ours are.
+
   python train/encoder_from_baseline.py configs/flashmd_organic8_scratch.yaml \
       --source results/runs/flashmd_organic8_scratch/model.ckpt --out results/runs/supervised_encoder_organic8
 """
@@ -98,7 +101,9 @@ def main():
     # 1. reload from the key metatrain fine-tuning reads (best_model_state_dict, else model_state_dict)
     saved = torch.load(path, map_location="cpu", weights_only=False)
     if saved.get("best_model_state_dict") is not None:
-        a, b = saved["best_model_state_dict"], saved["model_state_dict"]
+        # get_checkpoint() puts finetune_config into model_state_dict only, so compare without it
+        a = {k: v for k, v in saved["best_model_state_dict"].items() if k != "finetune_config"}
+        b = {k: v for k, v in saved["model_state_dict"].items() if k != "finetune_config"}
         assert a.keys() == b.keys() and all(torch.equal(a[k], b[k]) for k in a), \
             "best_model_state_dict and model_state_dict of the saved checkpoint differ"
         reload_sd = a
@@ -113,7 +118,9 @@ def main():
     source = FlashMD(md["model_hypers"], md["dataset_info"])
     source.set_masses(masses)
     source.set_timestep(timestep)
-    source.load_state_dict(sd, strict=True)
+    # metatrain's trainer stores finetune_config inside the state dict; its own load_checkpoint
+    # removes it before loading, and so do we
+    source.load_state_dict({k: v for k, v in sd.items() if k != "finetune_config"}, strict=True)
     source = source.to(dtype=torch.float32)
     for additive in source.additive_models:
         additive.to(dtype=torch.float64)
