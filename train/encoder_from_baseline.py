@@ -13,14 +13,19 @@ function, the same config, NO targets. So training from it adds the heads and fi
 scaler exactly as for a pretrained encoder; the source model's heads and scaler are not carried
 over. Weights are copied from the source checkpoint's best_model_state_dict (the model metatrain
 exported as model.pt), with the copying rule of load_encoder(kind="baseline") in
-eval/feature_change_vs_jump.py: every tensor whose name and shape exist in the target-free model.
+eval/feature_change_vs_jump.py (every tensor whose name and shape exist in the target-free
+model), except that the scaler and additive models are left at their defaults.
 
 Checks, all of which stop the script if they fail:
-  1. every encoder tensor of the saved model is bitwise equal to the source tensor of that name;
+  1. every copied tensor has the same precision as the model's and is bitwise equal to the source
+     tensor after copying; the scaler and additive models are NOT copied and are checked to keep
+     the target-free defaults (as for a pretrained encoder, whose scaler is fitted in training);
   2. the only names of the target-free model not filled from the source are the scaler and
      additive models (as in load_encoder);
-  3. reloading the saved checkpoint the way pretrained encoders are loaded gives the same
-     per-atom features as the model in memory, on a few frames of the training file.
+  3. the saved checkpoint, reloaded from the key metatrain fine-tuning reads
+     (best_model_state_dict, which must equal model_state_dict), gives the same per-atom features
+     as the SOURCE model itself (rebuilt from the source checkpoint's own model_data with its heads,
+     loaded strictly), on a few frames of the training file.
 
   python train/encoder_from_baseline.py configs/flashmd_organic8_scratch.yaml \
       --source results/runs/flashmd_organic8_scratch/model.ckpt --out results/runs/supervised_encoder_organic8
@@ -65,16 +70,22 @@ def main():
     src = torch.load(args.source, map_location="cpu", weights_only=False)
     sd = src.get("best_model_state_dict") or src["model_state_dict"]
     own = model.state_dict()
-    shared = {k: v for k, v in sd.items() if k in own and own[k].shape == v.shape}
+    # encoder tensors only: the scaler and additive models are left at the target-free defaults,
+    # so nothing fitted to the source's targets is carried over
+    head_free = lambda k: not k.startswith(("scaler", "additive_models"))  # noqa: E731
+    shared = {k: v for k, v in sd.items() if k in own and own[k].shape == v.shape and head_free(k)}
     missing = [k for k in own if k not in shared]
-    bad_missing = [k for k in missing if not k.startswith(("scaler", "additive_models"))]
+    bad_missing = [k for k in missing if head_free(k)]
     assert not bad_missing, f"encoder weights missing from {args.source}: {bad_missing[:5]}"
+    for k, v in shared.items():
+        assert v.dtype == own[k].dtype, f"tensor {k}: source dtype {v.dtype}, model dtype {own[k].dtype}"
     model.load_state_dict(shared, strict=False)
-    copied = [k for k in shared if not k.startswith(("scaler", "additive_models"))]
     after = model.state_dict()
-    for k in copied:
-        assert torch.equal(after[k].cpu(), sd[k].to(after[k].dtype).cpu()), f"tensor {k} differs after copying"
-    print(f"copied {len(copied)} encoder tensors from {args.source}; not copied (as for a pretrained encoder): "
+    for k in shared:
+        assert torch.equal(after[k].cpu(), sd[k].cpu()), f"tensor {k} differs after copying"
+    for k in missing:
+        assert torch.equal(after[k].cpu(), own[k].cpu()), f"tensor {k} was changed although it should keep its default"
+    print(f"copied {len(shared)} encoder tensors from {args.source}; left at their defaults: "
           f"{len(missing)} scaler and additive-model tensors")
 
     os.makedirs(args.out, exist_ok=True)
@@ -84,29 +95,49 @@ def main():
     path = os.path.join(args.out, "pretrained.ckpt")
     torch.save(ckpt, path)
 
-    # reload the way pretrained encoders are loaded (load_encoder(kind="pretrained")) and compare features
-    re = target_free(model_hypers, dataset_info, masses, timestep)
+    # 1. reload from the key metatrain fine-tuning reads (best_model_state_dict, else model_state_dict)
     saved = torch.load(path, map_location="cpu", weights_only=False)
-    re.load_state_dict({k: v for k, v in saved["model_state_dict"].items() if k != "finetune_config"})
+    if saved.get("best_model_state_dict") is not None:
+        a, b = saved["best_model_state_dict"], saved["model_state_dict"]
+        assert a.keys() == b.keys() and all(torch.equal(a[k], b[k]) for k in a), \
+            "best_model_state_dict and model_state_dict of the saved checkpoint differ"
+        reload_sd = a
+    else:
+        reload_sd = saved["model_state_dict"]
+    re = target_free(model_hypers, dataset_info, masses, timestep)
+    re.load_state_dict({k: v for k, v in reload_sd.items() if k != "finetune_config"})
+
+    # 2. the SOURCE model itself, with its own heads and targets, loaded strictly
+    from metatrain.experimental.flashmd import FlashMD
+    md = src["model_data"]
+    source = FlashMD(md["model_hypers"], md["dataset_info"])
+    source.set_masses(masses)
+    source.set_timestep(timestep)
+    source.load_state_dict(sd, strict=True)
+    source = source.to(dtype=torch.float32)
+    for additive in source.additive_models:
+        additive.to(dtype=torch.float64)
+    source.scaler.to(dtype=torch.float64)
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model.to(device); re.to(device)
     frames = []
     for i, a in enumerate(ase.io.iread(args.check_frames, index=":", format="extxyz")):
         if i >= args.n_check:
             break
         frames.append((torch.tensor(a.numbers, dtype=torch.int32), torch.tensor(a.get_positions()),
                        torch.tensor(a.get_momenta()), torch.tensor(a.cell.array)))
-    h_mem = features(model, frames, device)
-    h_re = features(re, frames, device)
-    diff = max(float(abs(a - b).max()) for a, b in zip(h_mem, h_re))
-    assert diff == 0.0, f"features of the reloaded checkpoint differ by up to {diff}"
-    print(f"reloaded checkpoint gives identical features on {len(frames)} frames")
+    h_src = features(source.to(device), frames, device)
+    h_re = features(re.to(device), frames, device)
+    scale = max(float(abs(h).max()) for h in h_src)
+    diff = max(float(abs(x - y).max()) for x, y in zip(h_src, h_re))
+    assert diff <= 1e-5 * max(scale, 1.0), f"saved encoder's features differ from the source model's by up to {diff} (largest feature {scale})"
+    print(f"saved encoder reproduces the source model's features on {len(frames)} frames (largest difference {diff:.2e})")
 
     first = next(model.parameters()).detach().flatten()[:5].cpu().tolist()
     with open(os.path.join(args.out, "manifest.json"), "w") as f:
         json.dump({"kind": "encoder of a model trained with labels (E14 control)", "config": args.config,
                    "source": args.source, "source_epoch": src.get("best_epoch", src.get("epoch")),
-                   "encoder_tensors_copied": len(copied), "not_copied": missing,
+                   "encoder_tensors_copied": len(shared), "not_copied": missing,
                    "first_weights": first, "masses": masses, "timestep_fs": timestep,
                    "model_hypers": model_hypers}, f, indent=1)
     print(f"written {path} and manifest.json")
