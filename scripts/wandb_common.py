@@ -38,6 +38,9 @@ EXPERIMENTS = {
     "E10": "Hypothesis H3: are the organic runs deterministic and energy-conserving? (data check only)",
     "E11": "Hypothesis H5: water pretraining with no predictor (features now and later pulled together)",
     "E12": "Hypothesis H2: organic pretraining with pairs 100 fs apart instead of 8 fs",
+    "E13": "Water: pretraining on only the 896 frames the baseline trains on (plain and no predictor; 20 and 200 epochs)",
+    "E14": "Organic control that must work: training from the encoder of the baseline trained on all labels",
+    "E15": "Organic: pretraining on only the 8,400 frames the baseline trains on (plain and no predictor; 20 and 200 epochs)",
 }
 
 VARIANTS = ("plain", "normtarget", "resid", "proj", "residrel")
@@ -99,6 +102,14 @@ def classify(name):
         return "E12", "gap100", seed
     if name == "e12_pretrain_plain_gap100_organic8":
         return "E12", "pretrain-gap100", 0
+    m = re.fullmatch(r"e(13|15)_finetune_(plain|nopred)_same10_ep(20|200)_(water16|organic8)_10pct_s\d", name)
+    if m and (m.group(1), m.group(4)) in (("13", "water16"), ("15", "organic8")):
+        return f"E{m.group(1)}", f"{m.group(2)}-ep{m.group(3)}", seed
+    m = re.fullmatch(r"e(13|15)_pretrain_(plain|nopred)_same10_ep(20|200)_(water16|organic8)", name)
+    if m and (m.group(1), m.group(4)) in (("13", "water16"), ("15", "organic8")):
+        return f"E{m.group(1)}", f"pretrain-{m.group(2)}-ep{m.group(3)}", 0
+    if re.fullmatch(r"e14_finetune_supervised_organic8_10pct_s\d", name):
+        return "E14", "supervised-encoder", seed
     return None
 
 

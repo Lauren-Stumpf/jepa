@@ -1,0 +1,17 @@
+# name|kind|min GPU memory (MB)|runs per GPU|spec   (scripts/launch_runs.sh)
+e13_pretrain_plain_same10_ep20_water16|pretrain|20000|1|CONFIG=configs/flashmd_water16_scratch.yaml TRAIN=data/water/pairs/16fs/train_10pct.xyz VAL=data/water/pairs/16fs/val.xyz -- --batch_size 8 --predictor plain --epochs 20 --wandb jepa-flashmd-experiments --wandb_group E13 --wandb_job_type pretrain-plain-ep20
+e13_finetune_plain_same10_ep20_water16_10pct_s0|train|40000|1|configs/e13_finetune_plain_same10_ep20_water16_10pct_s0.yaml
+e13_finetune_plain_same10_ep20_water16_10pct_s1|train|40000|1|configs/e13_finetune_plain_same10_ep20_water16_10pct_s1.yaml
+e13_finetune_plain_same10_ep20_water16_10pct_s2|train|40000|1|configs/e13_finetune_plain_same10_ep20_water16_10pct_s2.yaml
+e13_pretrain_plain_same10_ep200_water16|pretrain|20000|1|CONFIG=configs/flashmd_water16_scratch.yaml TRAIN=data/water/pairs/16fs/train_10pct.xyz VAL=data/water/pairs/16fs/val.xyz -- --batch_size 8 --predictor plain --epochs 200 --wandb jepa-flashmd-experiments --wandb_group E13 --wandb_job_type pretrain-plain-ep200
+e13_finetune_plain_same10_ep200_water16_10pct_s0|train|40000|1|configs/e13_finetune_plain_same10_ep200_water16_10pct_s0.yaml
+e13_finetune_plain_same10_ep200_water16_10pct_s1|train|40000|1|configs/e13_finetune_plain_same10_ep200_water16_10pct_s1.yaml
+e13_finetune_plain_same10_ep200_water16_10pct_s2|train|40000|1|configs/e13_finetune_plain_same10_ep200_water16_10pct_s2.yaml
+e13_pretrain_nopred_same10_ep20_water16|pretrain|20000|1|CONFIG=configs/flashmd_water16_scratch.yaml TRAIN=data/water/pairs/16fs/train_10pct.xyz VAL=data/water/pairs/16fs/val.xyz -- --batch_size 8 --predictor none --epochs 20 --wandb jepa-flashmd-experiments --wandb_group E13 --wandb_job_type pretrain-nopred-ep20
+e13_finetune_nopred_same10_ep20_water16_10pct_s0|train|40000|1|configs/e13_finetune_nopred_same10_ep20_water16_10pct_s0.yaml
+e13_finetune_nopred_same10_ep20_water16_10pct_s1|train|40000|1|configs/e13_finetune_nopred_same10_ep20_water16_10pct_s1.yaml
+e13_finetune_nopred_same10_ep20_water16_10pct_s2|train|40000|1|configs/e13_finetune_nopred_same10_ep20_water16_10pct_s2.yaml
+e13_pretrain_nopred_same10_ep200_water16|pretrain|20000|1|CONFIG=configs/flashmd_water16_scratch.yaml TRAIN=data/water/pairs/16fs/train_10pct.xyz VAL=data/water/pairs/16fs/val.xyz -- --batch_size 8 --predictor none --epochs 200 --wandb jepa-flashmd-experiments --wandb_group E13 --wandb_job_type pretrain-nopred-ep200
+e13_finetune_nopred_same10_ep200_water16_10pct_s0|train|40000|1|configs/e13_finetune_nopred_same10_ep200_water16_10pct_s0.yaml
+e13_finetune_nopred_same10_ep200_water16_10pct_s1|train|40000|1|configs/e13_finetune_nopred_same10_ep200_water16_10pct_s1.yaml
+e13_finetune_nopred_same10_ep200_water16_10pct_s2|train|40000|1|configs/e13_finetune_nopred_same10_ep200_water16_10pct_s2.yaml

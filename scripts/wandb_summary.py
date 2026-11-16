@@ -35,6 +35,10 @@ REFERENCES = {
     "E06": [("E04", "baseline", "baseline"), ("E04", "plain", "plain (E04)")],
     "E11": [("E04", "baseline", "baseline"), ("E04", "plain", "plain (E04)"), ("E06", "regonly", "regulariser only (E06)")],
     "E12": [("E01", "baseline", "baseline"), ("E01", "plain", "plain, 8 fs gap (E01)")],
+    "E13": [("E04", "baseline", "baseline"), ("E04", "plain", "plain, all frames (E04)"),
+            ("E11", "nopred", "no predictor, all frames (E11)")],
+    "E14": [("E01", "baseline", "baseline"), ("E01", "plain", "plain (E01)")],
+    "E15": [("E01", "baseline", "baseline"), ("E01", "plain", "plain, all frames (E01)")],
 }
 
 MEASURES = [(VAL_P, "Validation momentum error"), (TEST_P, "Test momentum error"),

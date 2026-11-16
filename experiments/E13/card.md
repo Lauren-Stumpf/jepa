@@ -39,7 +39,7 @@ Two lengths because both are defensible ways to match E04 (20 epochs, 22,400 ste
 
 **Measure and rule:** test momentum error, mean of three seeds, against the baseline and against the same variant pretrained on all frames. A difference counts if every seed of one arm beats every seed of the other.
 
-**Runs:** 4 pretrainings (about 20 minutes each at 20 epochs, about 3.5 hours each at 200 epochs, 24 GB card) and 12 training runs (about 1 hour each, 46 GB card), then test evaluation.
+**Runs:** 4 pretrainings (about 30 minutes each at 20 epochs, about 5 hours each at 200 epochs, 24 GB card; the full validation set is evaluated every epoch) and 12 training runs (about 1 hour each, 46 GB card), then test evaluation.
 
 ## Result
 (to be filled in)

@@ -1,0 +1,17 @@
+# name|kind|min GPU memory (MB)|runs per GPU|spec   (scripts/launch_runs.sh)
+e15_pretrain_plain_same10_ep20_organic8|pretrain|20000|1|CONFIG=configs/flashmd_organic8_scratch.yaml TRAIN=data/organic8/train_10pct.xyz VAL=data/organic8/val.xyz -- --predictor plain --epochs 20 --wandb jepa-flashmd-experiments --wandb_group E15 --wandb_job_type pretrain-plain-ep20
+e15_finetune_plain_same10_ep20_organic8_10pct_s0|train|20000|1|configs/e15_finetune_plain_same10_ep20_organic8_10pct_s0.yaml
+e15_finetune_plain_same10_ep20_organic8_10pct_s1|train|20000|1|configs/e15_finetune_plain_same10_ep20_organic8_10pct_s1.yaml
+e15_finetune_plain_same10_ep20_organic8_10pct_s2|train|20000|1|configs/e15_finetune_plain_same10_ep20_organic8_10pct_s2.yaml
+e15_pretrain_plain_same10_ep200_organic8|pretrain|20000|1|CONFIG=configs/flashmd_organic8_scratch.yaml TRAIN=data/organic8/train_10pct.xyz VAL=data/organic8/val.xyz -- --predictor plain --epochs 200 --wandb jepa-flashmd-experiments --wandb_group E15 --wandb_job_type pretrain-plain-ep200
+e15_finetune_plain_same10_ep200_organic8_10pct_s0|train|20000|1|configs/e15_finetune_plain_same10_ep200_organic8_10pct_s0.yaml
+e15_finetune_plain_same10_ep200_organic8_10pct_s1|train|20000|1|configs/e15_finetune_plain_same10_ep200_organic8_10pct_s1.yaml
+e15_finetune_plain_same10_ep200_organic8_10pct_s2|train|20000|1|configs/e15_finetune_plain_same10_ep200_organic8_10pct_s2.yaml
+e15_pretrain_nopred_same10_ep20_organic8|pretrain|20000|1|CONFIG=configs/flashmd_organic8_scratch.yaml TRAIN=data/organic8/train_10pct.xyz VAL=data/organic8/val.xyz -- --predictor none --epochs 20 --wandb jepa-flashmd-experiments --wandb_group E15 --wandb_job_type pretrain-nopred-ep20
+e15_finetune_nopred_same10_ep20_organic8_10pct_s0|train|20000|1|configs/e15_finetune_nopred_same10_ep20_organic8_10pct_s0.yaml
+e15_finetune_nopred_same10_ep20_organic8_10pct_s1|train|20000|1|configs/e15_finetune_nopred_same10_ep20_organic8_10pct_s1.yaml
+e15_finetune_nopred_same10_ep20_organic8_10pct_s2|train|20000|1|configs/e15_finetune_nopred_same10_ep20_organic8_10pct_s2.yaml
+e15_pretrain_nopred_same10_ep200_organic8|pretrain|20000|1|CONFIG=configs/flashmd_organic8_scratch.yaml TRAIN=data/organic8/train_10pct.xyz VAL=data/organic8/val.xyz -- --predictor none --epochs 200 --wandb jepa-flashmd-experiments --wandb_group E15 --wandb_job_type pretrain-nopred-ep200
+e15_finetune_nopred_same10_ep200_organic8_10pct_s0|train|20000|1|configs/e15_finetune_nopred_same10_ep200_organic8_10pct_s0.yaml
+e15_finetune_nopred_same10_ep200_organic8_10pct_s1|train|20000|1|configs/e15_finetune_nopred_same10_ep200_organic8_10pct_s1.yaml
+e15_finetune_nopred_same10_ep200_organic8_10pct_s2|train|20000|1|configs/e15_finetune_nopred_same10_ep200_organic8_10pct_s2.yaml

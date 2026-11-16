@@ -1,0 +1,4 @@
+# name|kind|min GPU memory (MB)|runs per GPU|spec   (scripts/launch_runs.sh)
+e14_finetune_supervised_organic8_10pct_s0|train|20000|1|configs/e14_finetune_supervised_organic8_10pct_s0.yaml
+e14_finetune_supervised_organic8_10pct_s1|train|20000|1|configs/e14_finetune_supervised_organic8_10pct_s1.yaml
+e14_finetune_supervised_organic8_10pct_s2|train|20000|1|configs/e14_finetune_supervised_organic8_10pct_s2.yaml

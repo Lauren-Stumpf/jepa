@@ -36,7 +36,7 @@ Status: proposed (16 Nov 2026). Not yet run.
 
 **Measure and rule:** test momentum error, mean of three seeds, against the baseline. A difference counts if every seed of one arm beats every seed of the other.
 
-**Runs:** 4 pretrainings (about 40 minutes each at 20 epochs, about 7 hours each at 200 epochs, 24 GB card) and 12 training runs (about 2.5 hours each, 24 GB card), then test evaluation.
+**Runs:** 4 pretrainings (about 1 hour each at 20 epochs, about 9 hours each at 200 epochs, 24 GB card; the full validation set is evaluated every epoch) and 12 training runs (about 2.5 hours each, 24 GB card), then test evaluation.
 
 ## Result
 (to be filled in)
