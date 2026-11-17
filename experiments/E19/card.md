@@ -28,8 +28,8 @@ A network that is not built to be rotation-symmetric changes under rotation even
 
 **Assumptions:**
 1. A linear probe for the three components of a direction is a strict test: direction could be held in a form a linear map cannot read. The rotation measurement does not have this limit.
-3. A high score on stored frames alone can come from the probe memorising what each atom's surroundings look like in the stored orientation; the score on rotated frames is the one to read.
-2. A large change under rotation shows dependence on direction, not that the dependence is useful.
+2. A high score on stored frames alone can come from the probe memorising what each atom's surroundings look like in the stored orientation; the score on rotated frames is the one to read.
+3. A large change under rotation shows dependence on direction, not that the dependence is useful.
 
 **Runs:** 2 runs of eval/probe_direction.py, minutes each on one GPU.
 

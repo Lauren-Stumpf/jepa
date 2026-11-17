@@ -120,8 +120,10 @@ def relative_change(h0, h1, types=None, z=None):
             if m.sum() < 2:
                 continue
             a, b = a[m], b[m]
+        if len(a) < 2:
+            continue
         num.append(((b - a) ** 2).sum(1).mean())
-        den.append(((a - a.mean(0)) ** 2).sum(1).mean())
+        den.append(((a - a.mean(0)) ** 2).sum() / (len(a) - 1))   # n - 1: unbiased with few atoms of an element per frame
     return float(np.mean(num) / np.mean(den))
 
 
@@ -192,6 +194,9 @@ def main():
         h_rot2, _ = encode_frames(model, frames, device, rotate_seed=args.seed + 101)
         if V_rot is None:      # the rotations depend only on the seed, so the rotated targets are shared by all encoders
             V_rot = np.concatenate([vector_targets(*f, masses, args.cutoff) for f in rot_frames])
+            first_rot_q = torch.cat([f[1] for f in rot_frames])
+        assert torch.equal(torch.cat([f[1] for f in rot_frames]), first_rot_q), \
+            f"{name}: rotated frames differ from the first encoder's; the shared rotated targets would be wrong"
         X, Xr = np.concatenate(h0), np.concatenate(h_rot)
         enc = {"kind": kind, "path": path, "repeat_change": again,
                "change_under_rotation": {"all": float(np.mean([relative_change(h0, h_rot), relative_change(h0, h_rot2)])),
