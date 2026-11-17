@@ -19,7 +19,7 @@ Status: agreed (17 Nov 2026).
 | baseline-500ep | 500 | 28,000 | E13 plain and no predictor, 200 pretraining epochs + 100 labelled epochs (28,000 steps) |
 | baseline-1400ep | 1,400 | 78,400 | E05 plain: pretraining on all frames (22,400) + 1,000 labelled epochs (56,000) |
 
-**Matched:** the 896 labelled frames, batch 16, learning rate, schedule shape (1% warm-up, cosine decay over the run's own length), seeds 0, 1, 2. Checkpoints every 50 epochs (500) and every 100 epochs (1,400): saving does not affect training.
+**Matched:** the 896 labelled frames, batch 16, learning rate, schedule shape (1% warm-up, cosine decay over the run's own length), seeds 0, 1, 2. Checkpoints every 50 epochs (500) and every 100 epochs (1,400): saving does not affect training, but the grid is coarser than the 10-epoch grid of the E13 arms, which matters only if a checkpoint is ever selected afterwards.
 
 **Controls:** reference arms already run: baseline 100 epochs (0.0303), baseline 1,000 epochs (0.0074).
 

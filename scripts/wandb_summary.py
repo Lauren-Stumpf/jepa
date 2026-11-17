@@ -40,7 +40,7 @@ REFERENCES = {
     "E14": [("E01", "baseline", "baseline"), ("E01", "plain", "plain (E01)"),
             ("E00", "organic8-100ep", "full-data baseline (E00)")],
     "E15": [("E01", "baseline", "baseline"), ("E01", "plain", "plain, all frames (E01)")],
-    "E16": [("E04", "baseline", "baseline, 100 epochs (E04)"), ("E05", "baseline", "baseline, 1,000 epochs (E05)"),
+    "E16": [("E04", "baseline", "baseline"), ("E05", "baseline", "baseline, 1,000 epochs (E05)"),
             ("E13", "plain-ep200", "plain: 200 pretraining + 100 labelled epochs (E13)"),
             ("E13", "nopred-ep200", "no predictor: 200 pretraining + 100 labelled epochs (E13)"),
             ("E05", "plain", "plain: pretraining + 1,000 labelled epochs (E05)")],
