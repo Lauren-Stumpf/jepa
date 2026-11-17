@@ -7,21 +7,26 @@ quantities were all unchanged by rotating the frame and so could not see directi
 1. Rotation sensitivity. Each frame is encoded as stored and again after a random rotation of
    the whole frame (positions, momenta and cell together, with the same routine the pretraining
    uses for its augmentation, rotations only). Reported: mean over atoms of
-   |h(rotated) - h(original)|^2 divided by the spread of the features across the atoms of the
-   frame, the same normalisation as the "change over the gap" in E08. 0 means the features
-   ignore direction; values near or above 1 mean a rotated atom looks as different from itself
-   as from another atom. As a self-check, the same frame encoded twice without rotation must
-   give exactly 0.
+   |h(rotated) - h(original)|^2 divided by the spread of the features across atoms of one frame,
+   for all atoms and within each element (the all-atom spread includes the difference between
+   elements). Scale: 0 means the features ignore direction; about 2 means the rotated features
+   are unrelated to the original ones. A network that is not built to be rotation-symmetric
+   changes under rotation even when untrained, so values are read AGAINST the untrained encoder
+   and the encoder trained with labels, not against a fixed threshold. Self-check: the same
+   frames encoded twice without rotation must agree (the script stops otherwise).
 
-2. Direction probes. Ridge probes exactly as in eval/probe_compare.py (per element, split by
-   run, at most --max_train_rows training atoms, strength chosen on an inner split) for vector
-   quantities in the frame of the simulation box, each scored as the mean R^2 of its three
-   components:
-     direction to the nearest neighbour      unit vector
-     momentum direction                      unit vector of the current momentum (an encoder input)
-     momentum (mass-scaled)                  vector, an encoder input
-     displacement over the stride            mass-scaled vector (what the task predicts)
-     momentum change over the stride         mass-scaled vector (what the task predicts)
+2. Direction probes. Ridge probes as in eval/probe_compare.py (per element, split by run, at
+   most --max_train_rows training atoms, strength chosen on an inner split) for vector quantities
+   in the frame of the simulation box, each scored as the mean R^2 of its three components:
+     direction to the nearest neighbour      unit vector            (geometry: informative)
+     momentum change over the stride         mass-scaled vector     (what the task predicts: informative)
+     momentum direction, momentum            encoder inputs         (reference)
+     displacement over the stride            mass-scaled vector     (close to momentum x time, so it
+                                                                     mostly re-reads the input momentum)
+   Each is scored twice on the held-out runs: on the frames as stored, and on the same frames
+   after a random rotation (rotated features against rotated targets, probe still fitted on
+   stored frames). A real code for direction keeps its score on rotated frames; a probe that
+   has only memorised what each atom's surroundings look like in the stored orientation loses it.
    Control that must fail: a random unit vector per atom.
 
   python eval/probe_direction.py configs/flashmd_water16_scratch.yaml data/water/pairs/16fs/val.xyz \
@@ -43,8 +48,8 @@ import eval.probe_compare as pc  # noqa: E402
 from eval.feature_change_vs_jump import load_encoder  # noqa: E402
 from train.pretrain_jepa import PairData, encode, load_config, make_system  # noqa: E402
 
-VECTORS = ["direction to nearest neighbour", "momentum direction", "momentum (mass-scaled)",
-           "displacement over the stride", "momentum change over the stride"]
+VECTORS = ["direction to nearest neighbour", "momentum change over the stride", "momentum direction",
+           "momentum (mass-scaled)", "displacement over the stride"]
 
 
 def vector_targets(t, q, p, qf, pf, cell, pbc, masses, cutoff):
@@ -65,36 +70,59 @@ def vector_targets(t, q, p, qf, pf, cell, pbc, masses, cutoff):
             unit[a_i] = vec / dist
     pn = np.linalg.norm(p_, axis=1, keepdims=True)
     p_dir = np.where(pn > 1e-12, p_ / np.maximum(pn, 1e-12), np.nan)
-    return np.stack([unit, p_dir, p_ / sm, dq * sm, dp / sm], 1)
+    return np.stack([unit, dp / sm, p_dir, p_ / sm, dq * sm], 1)
+
+
+def momentum_of(system):
+    return system.get_data("momentum").block().values[:, :, 0]
 
 
 def encode_frames(model, frames, device, rotate_seed=None):
-    """Per-frame feature arrays; with rotate_seed, each frame is first rotated at random."""
+    """(per-frame feature arrays, frames as encoded). With rotate_seed, each frame and its future
+    are first turned by one random rotation, and the returned frames are the rotated ones."""
     nl = model.requested_neighbor_lists()
-    out = []
+    feats, used = [], []
     if rotate_seed is not None:
         torch.manual_seed(rotate_seed)
     with torch.no_grad():
         for b in range(0, len(frames), 32):
             chunk = frames[b:b + 32]
-            systems = [make_system(t, q, p, c, pb, torch.float32, device) for t, q, p, _, _, c, pb in chunk]
+            now = [make_system(t, q, p, c, pb, torch.float64, device) for t, q, p, _, _, c, pb in chunk]
             if rotate_seed is not None:
-                ops = random_transformations(len(chunk), 0, device=torch.device(device), dtype=torch.float32,
+                fut = [make_system(t, qf, pf, c, pb, torch.float64, device) for t, _, _, qf, pf, c, pb in chunk]
+                ops = random_transformations(len(chunk), 0, device=torch.device(device), dtype=torch.float64,
                                              add_inversions=False)
-                systems = ops.transform_systems(systems)
-            systems = [get_system_with_neighbor_lists(s, nl) for s in systems]
-            h = encode(model, systems).cpu().numpy().astype(np.float64)
+                now, fut = ops.transform_systems(now), ops.transform_systems(fut)
+                for f, s, sf in zip(chunk, now, fut):
+                    used.append((f[0], s.positions.cpu(), momentum_of(s).cpu(), sf.positions.cpu(),
+                                 momentum_of(sf).cpu(), s.cell.cpu(), f[6]))
+            else:
+                used.extend(chunk)
+            # encode in single precision, as everywhere else
+            enc_in = [make_system(u[0], u[1], u[2], u[5], u[6], torch.float32, device) for u in used[-len(chunk):]]
+            enc_in = [get_system_with_neighbor_lists(s, nl) for s in enc_in]
+            h = encode(model, enc_in).cpu().numpy().astype(np.float64)
             k = 0
             for f in chunk:
-                out.append(h[k:k + len(f[0])])
+                feats.append(h[k:k + len(f[0])])
                 k += len(f[0])
             assert k == len(h)
-    return out
+    return feats, used
 
 
-def relative_change(h0, h1):
-    spread = float(np.mean([((h - h.mean(0)) ** 2).sum(1).mean() for h in h0]))
-    return float(np.mean([((b - a) ** 2).sum(1).mean() for a, b in zip(h0, h1)])) / spread
+def relative_change(h0, h1, types=None, z=None):
+    """Mean squared change divided by the spread across atoms of one frame; with z, for atoms of
+    element z against the spread among atoms of that element."""
+    num, den = [], []
+    for k, (a, b) in enumerate(zip(h0, h1)):
+        if z is not None:
+            m = types[k] == z
+            if m.sum() < 2:
+                continue
+            a, b = a[m], b[m]
+        num.append(((b - a) ** 2).sum(1).mean())
+        den.append(((a - a.mean(0)) ** 2).sum(1).mean())
+    return float(np.mean(num) / np.mean(den))
 
 
 def main():
@@ -124,43 +152,65 @@ def main():
     test_groups = set(rng.permutation(uniq)[: max(1, int(round(0.3 * len(uniq))))].tolist())
     print(f"{len(frames)} frames in {len(uniq)} groups ({len(test_groups)} held out)", flush=True)
 
-    Z = np.concatenate([f[0].numpy() for f in frames])
-    atom_group = np.concatenate([np.full(len(f[0]), g) for f, g in zip(frames, groups)])
+    types = [f[0].numpy() for f in frames]
+    Z = np.concatenate(types)
+    atom_group = np.concatenate([np.full(len(t), g) for t, g in zip(types, groups)])
     is_test = np.isin(atom_group, list(test_groups))
     V = np.concatenate([vector_targets(*f, masses, args.cutoff) for f in frames])     # atoms x vectors x 3
     noise = np.random.default_rng(args.seed + 2).standard_normal((len(Z), 3))
     noise /= np.linalg.norm(noise, axis=1, keepdims=True)
     elements = sorted(np.unique(Z).tolist())
 
-    def vector_score(X, Y3):
-        """Mean over the three components of the atom-weighted mean over elements of R^2."""
-        comps = []
+    def vector_score(X, Y3, X_test=None, Y3_test=None):
+        """Mean over the three components of the atom-weighted mean over elements of R^2 on the
+        held-out runs; with X_test, the held-out rows are taken from X_test / Y3_test instead."""
+        Xt = X if X_test is None else X_test
+        Yt = Y3 if Y3_test is None else Y3_test
+        comps, by_el = [], {str(z): [] for z in elements}
         for c in range(3):
             by, w = {}, {}
             for z in elements:
                 tr, te = (Z == z) & ~is_test, (Z == z) & is_test
-                by[z], w[z] = pc.ridge_fit_score(X[tr], Y3[tr, c], X[te], Y3[te, c], None)
+                by[z], w[z] = pc.ridge_fit_score(X[tr], Y3[tr, c], Xt[te], Yt[te, c], None)
+                by_el[str(z)].append(by[z])
             good = [k for k in by if np.isfinite(by[k])]
             comps.append(sum(by[k] * w[k] for k in good) / sum(w[k] for k in good) if good else float("nan"))
-        return float(np.mean(comps))
+        return float(np.mean(comps)), {k: float(np.mean(v)) for k, v in by_el.items()}
 
     res = {"file": args.xyz, "frames": len(frames), "elements": elements, "max_train_rows": args.max_train_rows,
            "vectors": VECTORS, "encoders": {}}
+    V_rot = None
     for spec in args.encoders:
         name, rest = spec.split("=", 1)
         kind, path = rest.split(":", 1)
         model = load_encoder(kind, path, hypers, info, masses, timestep, device)
-        h0 = encode_frames(model, frames, device)
-        again = relative_change(h0, encode_frames(model, frames, device))
-        assert again < 1e-8, f"{name}: the same frames encoded twice differ ({again}); the measurement is not repeatable"
-        rot = [relative_change(h0, encode_frames(model, frames, device, rotate_seed=args.seed + 100 + r)) for r in range(2)]
-        X = np.concatenate(h0)
-        enc = {"kind": kind, "path": path, "change_under_rotation": float(np.mean(rot)), "change_under_rotation_draws": rot,
-               "vectors": {v: vector_score(X, V[:, vi, :]) for vi, v in enumerate(VECTORS)},
-               "random_vector_control": vector_score(X, noise)}
+        h0, _ = encode_frames(model, frames, device)
+        h0b, _ = encode_frames(model, frames, device)
+        again = relative_change(h0, h0b)
+        assert again < 1e-6, f"{name}: the same frames encoded twice differ ({again}); the measurement is not repeatable"
+        h_rot, rot_frames = encode_frames(model, frames, device, rotate_seed=args.seed + 100)
+        h_rot2, _ = encode_frames(model, frames, device, rotate_seed=args.seed + 101)
+        if V_rot is None:      # the rotations depend only on the seed, so the rotated targets are shared by all encoders
+            V_rot = np.concatenate([vector_targets(*f, masses, args.cutoff) for f in rot_frames])
+        X, Xr = np.concatenate(h0), np.concatenate(h_rot)
+        enc = {"kind": kind, "path": path, "repeat_change": again,
+               "change_under_rotation": {"all": float(np.mean([relative_change(h0, h_rot), relative_change(h0, h_rot2)])),
+                                         **{f"element_{z}": float(np.mean([relative_change(h0, h_rot, types, z),
+                                                                           relative_change(h0, h_rot2, types, z)]))
+                                            for z in elements}},
+               "vectors": {}}
+        for vi, v in enumerate(VECTORS):
+            stored, stored_el = vector_score(X, V[:, vi, :])
+            rotated, rotated_el = vector_score(X, V[:, vi, :], Xr, V_rot[:, vi, :])
+            enc["vectors"][v] = {"stored_frames": stored, "rotated_frames": rotated,
+                                 "stored_by_element": stored_el, "rotated_by_element": rotated_el}
+        enc["random_vector_control"] = vector_score(X, noise)[0]
         res["encoders"][name] = enc
-        print(f"{name:12s} change under rotation {enc['change_under_rotation']:.3f} | control {enc['random_vector_control']:+.3f} | "
-              + " | ".join(f"{v[:26]} {enc['vectors'][v]:.2f}" for v in VECTORS), flush=True)
+        cr = enc["change_under_rotation"]
+        print(f"{name:12s} change under rotation: all {cr['all']:.2f} " + " ".join(f"el{z} {cr[f'element_{z}']:.2f}" for z in elements)
+              + f" | control {enc['random_vector_control']:+.3f} | "
+              + " | ".join(f"{v[:22]} {enc['vectors'][v]['stored_frames']:.2f}/{enc['vectors'][v]['rotated_frames']:.2f}" for v in VECTORS)
+              + "   (stored/rotated)", flush=True)
         del model
         torch.cuda.empty_cache()
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)

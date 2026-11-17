@@ -9,11 +9,14 @@ Status: agreed (17 Nov 2026). Measurement only.
 2. Can directions (to the nearest neighbour, of the momentum, of the displacement) be read out of the features by a linear map?
 
 **Prediction (confidence):**
-- Water pretrained encoders (plain, no predictor) change strongly under rotation (more than 0.5 of the spread between atoms): 60% confident.
-- The direction to the nearest neighbour reads out of the water pretrained features better than out of the untrained encoder's: 45% confident.
-- If both fail, the "direction" explanation of the water gain is dropped.
+A network that is not built to be rotation-symmetric changes under rotation even when untrained, so everything is read against the untrained encoder and the encoder trained with labels.
+- The direction to the nearest neighbour reads out of the water pretrained features (plain, no predictor), on rotated frames, at least as well as out of the untrained encoder's, and well above zero (over 0.3): 45% confident.
+- The water pretrained encoders change under rotation at least as much as the encoder trained with labels: 55% confident.
+- If the direction to the nearest neighbour scores near zero on rotated frames for the water pretrained encoders, the "direction" explanation of the water gain is dropped.
 
-**Measured:** as described in eval/probe_direction.py: change under a random rotation, relative to the spread across atoms; ridge probes for five vector quantities, scored as the mean R² of the three components, with the E18 split, row cap and choice of strength.
+**Measured:** as described in eval/probe_direction.py.
+- Change under a random rotation, relative to the spread across atoms (all atoms, and within each element). Scale: 0 = ignores direction, about 2 = unrelated to the unrotated features.
+- Ridge probes for five vector quantities, scored as the mean R² of the three components, with the E18 split, row cap and choice of strength. Each is scored on the held-out frames as stored and on the same frames after a random rotation (the probe is fitted on stored frames only). The two informative ones are the direction to the nearest neighbour and the momentum change over the stride; the momentum is an input, and the displacement is close to momentum times time, so it mostly re-reads the input.
 
 **Encoders and frames:** the same as E18 (organic: untrained, trained with labels, plain, normalised target, relative loss; water: those plus no predictor and regulariser only; validation frames).
 
@@ -25,6 +28,7 @@ Status: agreed (17 Nov 2026). Measurement only.
 
 **Assumptions:**
 1. A linear probe for the three components of a direction is a strict test: direction could be held in a form a linear map cannot read. The rotation measurement does not have this limit.
+3. A high score on stored frames alone can come from the probe memorising what each atom's surroundings look like in the stored orientation; the score on rotated frames is the one to read.
 2. A large change under rotation shows dependence on direction, not that the dependence is useful.
 
 **Runs:** 2 runs of eval/probe_direction.py, minutes each on one GPU.
