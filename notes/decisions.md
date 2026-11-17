@@ -582,3 +582,7 @@ E14 encoder conversion checked on the real checkpoint (161 encoder tensors copie
 
 E14 (control): training from the full-data organic encoder gives test 0.0148 on all three seeds, against 0.0226 for the 10% baseline. The checkpoint route works; E15 started.
 E13 (water, pretraining on the 896 labelled frames only): with 200 epochs (the same 22,400 steps as before) plain 0.0260 (14% better than baseline) and no predictor 0.0234 (23% better), close to the all-frames results (12% and 27%). With 20 epochs the gain disappears (no predictor 0.0290) or reverses (plain 0.0381). The water gain is not extra data; it needs enough pretraining steps. Open question: extra optimiser steps as such.
+
+## 17 Nov 2026: E18 probes
+
+Linear probes, like for like: pretraining with a prediction term removes momentum from the features in both systems (0.00, against 0.76 to 0.82 for untrained encoders). Organic pretrained encoders keep geometry (bond length about 0.58); water pretrained encoders keep almost nothing readable, and the no-predictor water encoder (largest gain, 27%) is the emptiest (element 0.20, everything else 0.00 to 0.17). So the water gain does not come from useful information in the features. E16 and E17 running.

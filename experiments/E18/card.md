@@ -47,10 +47,35 @@ Status: agreed (17 Nov 2026). Measurement only, no training of encoders.
 **Runs:** 2 runs of eval/probe_compare.py, minutes each on one GPU.
 
 ## Result
-(to be filled in)
+Run 17 Nov (results/eval/probe_organic.json, probe_water.json). Share of variation explained on held-out runs (1 = read out perfectly, 0 = not at all), averaged over elements:
+
+| Encoder | Element | Bond length | Nearest atom beyond two bonds | Atoms within 3 Å | Momentum size | Displacement size | Momentum change size |
+|---|---|---|---|---|---|---|---|
+| Organic, untrained | 1.00 | 0.56 | 0.36 | 0.90 | 0.76 | 0.38 | 0.18 |
+| Organic, trained with labels | 1.00 | 0.99 | 0.66 | 0.92 | 1.00 | 0.84 | 0.73 |
+| Organic, plain | 0.95 | 0.57 | 0.24 | 0.79 | -0.06 | -0.05 | -0.03 |
+| Organic, normalised target | 1.00 | 0.58 | 0.20 | 0.78 | -0.02 | -0.02 | -0.03 |
+| Organic, relative loss | 0.86 | 0.60 | 0.38 | 0.80 | -0.09 | -0.08 | -0.08 |
+| Water, untrained | 1.00 | 0.02 | 0.51 | 0.54 | 0.82 | 0.21 | 0.15 |
+| Water, trained with labels | 1.00 | 0.92 | 0.79 | 0.57 | 1.00 | 0.51 | 0.35 |
+| Water, plain | 0.99 | 0.00 | 0.09 | 0.29 | 0.00 | 0.00 | 0.00 |
+| Water, normalised target | 1.00 | 0.05 | 0.31 | 0.25 | 0.13 | 0.08 | 0.00 |
+| Water, relative loss | 0.94 | 0.00 | 0.33 | 0.31 | 0.00 | 0.00 | 0.00 |
+| Water, no predictor | 0.20 | 0.00 | 0.05 | 0.17 | 0.00 | 0.00 | 0.00 |
+| Water, regulariser only | 0.01 | 0.00 | 0.10 | 0.02 | 0.23 | 0.06 | 0.01 |
+
+Bonded neighbours are not scored for water (every hydrogen has one, every oxygen two). Frame temperature scores about 0 for every water encoder including the trained one: water runs differ little in temperature, so there is nothing to read out; not interpreted.
+
+Predictions:
+1. "Pretrained encoders read out current geometry better on water than on organic": failed. Organic pretrained encoders keep geometry (bond length 0.57 to 0.60, atoms within 3 Å about 0.8); water pretrained encoders keep almost none (bond length 0.00 to 0.05).
+2. "Pretrained encoders read out fast quantities worse than the encoder trained with labels": held, more strongly than expected. In both systems pretraining with a prediction term removes momentum from the features entirely (0.00 against 0.76 to 0.82 untrained), although momentum is an input to the encoder.
+3. "Regulariser only reads out fast quantities better than plain on water": held (momentum 0.23 against 0.00).
+
+The water encoder that gave the largest gain (no predictor, 27%) is the one from which the least can be read: not even element (0.20), and nothing about motion or bond lengths.
 
 ## Assumptions check
-(to be filled in)
+- Controls passed: a random number per atom scores 0.00 for every encoder; momentum size, an encoder input, reads out at 0.76 to 1.00 from untrained and trained encoders.
+- A linear probe shows what is easy to read out. Information may still be present in a form a linear map cannot use; but the labelled training starts its heads from these features, and the heads are small networks.
 
 ## Next
-(to be filled in)
+Taken with E13 and the pending E16: the water gain is not explained by useful information in the features. Candidate explanation to test: pretraining changes the starting weights in a way that helps optimisation (for example their scale or how the layers are conditioned), not what the features describe. E16 (equal training steps) is the first check.
