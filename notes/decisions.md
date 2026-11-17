@@ -577,3 +577,8 @@ Next (cards written, not run): E13 water pretraining on the 896 frames only; E14
 
 Test momentum error: E11 no predictor (water) 0.0220 against baseline 0.0303 and plain 0.0268; E12 100 fs gap (organic) 0.0234, the same as 8 fs (0.0234), baseline 0.0226. Both still carry the extra-frames confound.
 E14 encoder conversion checked on the real checkpoint (161 encoder tensors copied, features identical to the source model). E13 (4 pretrainings, 12 training runs) and E14 (3 runs) launched; E15 waits for E14. Checkpoint thinning: 623 files, 247 GB.
+
+## 17 Nov 2026: E13 and E14 results
+
+E14 (control): training from the full-data organic encoder gives test 0.0148 on all three seeds, against 0.0226 for the 10% baseline. The checkpoint route works; E15 started.
+E13 (water, pretraining on the 896 labelled frames only): with 200 epochs (the same 22,400 steps as before) plain 0.0260 (14% better than baseline) and no predictor 0.0234 (23% better), close to the all-frames results (12% and 27%). With 20 epochs the gain disappears (no predictor 0.0290) or reverses (plain 0.0381). The water gain is not extra data; it needs enough pretraining steps. Open question: extra optimiser steps as such.

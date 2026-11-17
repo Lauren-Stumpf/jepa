@@ -30,10 +30,11 @@ Status: proposed (16 Nov 2026). Not yet run.
 **Runs:** 1 checkpoint conversion (seconds), 3 training runs (about 2.5 hours each, 24 GB card), then test evaluation.
 
 ## Result
-(to be filled in)
+Test momentum error, 16 Nov: 0.0148, 0.0148, 0.0148 (mean 0.0148), against the 10% baseline 0.0226 and the full-data baseline 0.0138. Every seed is far below every 10% baseline seed: the control works. The checkpoint route (encoder-only checkpoint, new heads, scaler fitted in training) passes on a useful encoder.
 
 ## Assumptions check
-(to be filled in)
+- The conversion checks passed on the real checkpoint: 161 encoder tensors copied, features identical to the source model.
+- The three seeds agree to four decimals, as expected when the encoder already holds almost everything the task needs.
 
 ## Next
-(to be filled in)
+E15 started (17 Nov). A broken loading route is ruled out as the reason organic pretraining does not help.

@@ -42,10 +42,26 @@ Two lengths because both are defensible ways to match E04 (20 epochs, 22,400 ste
 **Runs:** 4 pretrainings (about 30 minutes each at 20 epochs, about 5 hours each at 200 epochs, 24 GB card; the full validation set is evaluated every epoch) and 12 training runs (about 1 hour each, 46 GB card), then test evaluation.
 
 ## Result
-(to be filled in)
+Test momentum error, 16 Nov (3 training seeds each):
+
+| Arm | Seeds | Mean | Against baseline | Seed rule against baseline |
+|---|---|---|---|---|
+| Baseline (E04) | 0.0310, 0.0286, 0.0313 | 0.0303 | | |
+| Plain, 896 frames, 20 epochs (2,240 steps) | 0.0401, 0.0416, 0.0325 | 0.0381 | 26% worse | worse |
+| Plain, 896 frames, 200 epochs (22,400 steps) | 0.0254, 0.0261, 0.0264 | 0.0260 | 14% better | better |
+| Plain, all 8,960 frames (E04, 22,400 steps) | 0.0274, 0.0260, 0.0271 | 0.0268 | 12% better | better |
+| No predictor, 896 frames, 20 epochs | 0.0283, 0.0292, 0.0294 | 0.0290 | 4% better | overlap |
+| No predictor, 896 frames, 200 epochs | 0.0243, 0.0218, 0.0242 | 0.0234 | 23% better | better |
+| No predictor, all 8,960 frames (E11) | 0.0218, 0.0219, 0.0223 | 0.0220 | 27% better | better |
+
+The prediction ("less than half the gain remains", 55%) failed. With the same number of optimiser steps as before, pretraining on only the baseline's 896 frames gives nearly the same gain as pretraining on all 8,960 frames (plain 14% against 12%; no predictor 23% against 27%). With 10 times fewer steps, the gain is gone (no predictor) or reversed (plain).
+
+So on water the gain is not explained by extra frames. It depends on how long pretraining runs.
 
 ## Assumptions check
-(to be filled in)
+- No pretraining collapsed.
+- New confound exposed by this result: the pretrained arms get 22,400 extra optimiser steps (pretraining) on top of the same labelled training as the baseline. E05 showed that ten times more labelled training does not remove the gain (15% at 1,000 epochs), which argues against "just extra steps", but E05 trained the baseline longer on labels, not with an unlabelled objective. A baseline given an equal number of extra steps of some neutral kind has not been run.
+- One pretraining seed per arm.
 
 ## Next
-(to be filled in)
+Report to Lauren. Candidate test for the extra-steps question: compare against E05's 1,000-epoch baseline at matched total steps.
