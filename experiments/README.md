@@ -55,6 +55,10 @@ Runs: <list, or see runs.txt>; cost: <GPU hours>
 <what this result makes us do>
 ```
 
+## Rule added 17 Nov 2026: say what it was tested on
+
+Every card and every results table states which frames a number was measured on and whether the model had seen that system: for water, validation and test frames are the same liquid as training (other runs); for organic, they are molecules never seen in training. A comparison between water and organic runs organic both ways (seen molecules and unseen molecules). A probe that finds nothing shows only that a linear read-out failed, not that the information is absent.
+
 ## Index
 
 | Id | Experiment | Status |

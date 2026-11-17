@@ -57,6 +57,22 @@ Both predictions held; the "direction" explanation survives its test.
 - On organic, pretraining does not raise it above the untrained encoder (0.46 to 0.52 against 0.52).
 So the pattern "pretraining adds readable direction" matches the pattern "pretraining helps": water yes, organic no, regulariser-only no.
 
+## Follow-up, 17 Nov: short against long pretraining (same frames, E13 encoders)
+Tested on: water validation frames (the same liquid the encoders were pretrained on, other runs). Bond direction score for hydrogens, rotated frames (first of three probe repeats; the others were still running when this was written):
+
+| Encoder | Its effect on test error (E13) | Hydrogen bond direction | Change under rotation |
+|---|---|---|---|
+| Untrained | | 0.49 | 0.42 |
+| Plain, 20 epochs | 26% worse than baseline | 0.90 | 1.81 |
+| Plain, 200 epochs | 14% better | 0.89 | 1.97 |
+| No predictor, 20 epochs | 4% better (seeds overlap baseline) | 0.99 | 1.95 |
+| No predictor, 200 epochs | 23% better | 0.86 | 1.98 |
+| Trained with labels | | 0.99 | 1.09 |
+
+The prediction "long pretrainings score higher than short ones" failed. Readable bond direction is already there after the short pretrainings, which give no gain (plain: a loss). So readable bond direction does not distinguish the pretrainings that help from those that do not. The "direction explains the water gain" idea is not supported.
+
+Crowding around a hydrogen (validation frames): water nearest atom 0.96 Å, second 1.53 Å, third 1.90 Å, 38 atoms within 4.5 Å; organic nearest 1.09 Å, second 1.91 Å, third 2.12 Å, 11 atoms within 4.5 Å. Organic hydrogens also have non-bonded atoms close by; the clear difference is the number of atoms in range (about 3.5 times more in water).
+
 ## Assumptions check
 - Controls passed: repeat encodings identical; random unit vector scores 0.00; momentum, an input, reads out at 1.00 from untrained and label-trained encoders.
 - This is an association across encoders (one encoder each), not a demonstrated cause. Among the four water encoders with a gain, the score (0.64 to 0.70) does not order them by gain (12 to 28%).
