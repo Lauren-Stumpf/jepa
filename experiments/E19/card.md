@@ -34,10 +34,34 @@ A network that is not built to be rotation-symmetric changes under rotation even
 **Runs:** 2 runs of eval/probe_direction.py, minutes each on one GPU.
 
 ## Result
-(to be filled in)
+Run 17 Nov (results/eval/direction_water.json, direction_organic.json). Scores on rotated held-out frames; scores on stored frames were the same to 0.01 for every entry, so the probes read a real code for direction, not a memorised orientation.
+
+| Encoder | Change under rotation (0 to about 2) | Direction to nearest neighbour | Momentum change | Momentum (input) |
+|---|---|---|---|---|
+| Water, untrained | 0.42 | 0.37 | 0.40 | 1.00 |
+| Water, trained with labels | 1.09 | 0.84 | 0.91 | 1.00 |
+| Water, plain (gain 12%) | 1.97 | 0.64 | 0.00 | 0.00 |
+| Water, normalised target (17%) | 1.96 | 0.70 | 0.00 | 0.00 |
+| Water, relative loss (28%) | 1.98 | 0.70 | 0.08 | 0.13 |
+| Water, no predictor (27%) | 1.98 | 0.64 | 0.00 | 0.00 |
+| Water, regulariser only (1%) | 1.99 | 0.33 | 0.03 | 0.20 |
+| Organic, untrained | 0.76 | 0.52 | 0.34 | 1.00 |
+| Organic, trained with labels | 0.75 | 0.71 | 0.93 | 1.00 |
+| Organic, plain | 1.61 | 0.48 | 0.00 | 0.00 |
+| Organic, normalised target | 1.77 | 0.52 | 0.02 | 0.38 |
+| Organic, relative loss | 1.20 | 0.46 | 0.00 | 0.00 |
+
+Both predictions held; the "direction" explanation survives its test.
+- Every pretrained encoder's features change almost completely when the frame is rotated (water 1.96 to 1.99, where about 2 means unrelated), far more than the untrained (0.42) or label-trained (1.09) encoder. The features are tied to orientation in the box. This is why E18, which only asked for quantities unchanged by rotation, read almost nothing out of them.
+- On water, the encoders pretrained with a "now against later" term hold the direction to the nearest neighbour much better than the untrained encoder (0.64 to 0.70 against 0.37). The regulariser-only encoder, the one water pretraining that gave no gain, does not (0.33).
+- On organic, pretraining does not raise it above the untrained encoder (0.46 to 0.52 against 0.52).
+So the pattern "pretraining adds readable direction" matches the pattern "pretraining helps": water yes, organic no, regulariser-only no.
 
 ## Assumptions check
-(to be filled in)
+- Controls passed: repeat encodings identical; random unit vector scores 0.00; momentum, an input, reads out at 1.00 from untrained and label-trained encoders.
+- This is an association across encoders (one encoder each), not a demonstrated cause. Among the four water encoders with a gain, the score (0.64 to 0.70) does not order them by gain (12 to 28%).
+- The momentum change, the other informative quantity, cannot be read out of any pretrained encoder (0.00): pretraining removes momentum, so whatever helps is geometric direction, not motion.
 
 ## Next
-(to be filled in)
+1. E16 (equal training steps) decides whether there is a real gain to explain.
+2. If there is: pretraining with a separate rotation for each frame of a pair (forbids direction features), with the probes repeated on that encoder to see what it learned instead.

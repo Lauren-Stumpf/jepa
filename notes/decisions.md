@@ -586,3 +586,7 @@ E13 (water, pretraining on the 896 labelled frames only): with 200 epochs (the s
 ## 17 Nov 2026: E18 probes
 
 Linear probes, like for like: pretraining with a prediction term removes momentum from the features in both systems (0.00, against 0.76 to 0.82 for untrained encoders). Organic pretrained encoders keep geometry (bond length about 0.58); water pretrained encoders keep almost nothing readable, and the no-predictor water encoder (largest gain, 27%) is the emptiest (element 0.20, everything else 0.00 to 0.17). So the water gain does not come from useful information in the features. E16 and E17 running.
+
+## 17 Nov 2026: E19 rotation sensitivity and direction probes
+
+Pretrained features change almost completely under rotation of the frame (about 1.97 on a 0 to 2 scale; untrained 0.42, label-trained 1.09 on water), which is why E18's rotation-unchanged quantities could not be read out. On water, encoders pretrained with a now-against-later term hold the direction to the nearest neighbour (0.64 to 0.70 on rotated frames) far better than untrained (0.37) or regulariser-only (0.33); on organic, pretraining does not raise it (0.46 to 0.52 against 0.52 untrained). The pattern matches where pretraining helps. An association, not yet a cause. Waiting for E16 before testing it further.
