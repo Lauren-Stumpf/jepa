@@ -41,6 +41,9 @@ EXPERIMENTS = {
     "E13": "Water: pretraining on only the 896 frames the baseline trains on (plain and no predictor; 20 and 200 epochs)",
     "E14": "Organic control that must work: training from the encoder of the baseline trained on all labels",
     "E15": "Organic: pretraining on only the 8,400 frames the baseline trains on (plain and no predictor; 20 and 200 epochs)",
+    "E16": "Water: baseline trained for as many optimiser steps as the pretrained arms get in total (500 and 1,400 epochs)",
+    "E17": "Water, all the labels: baseline against plain and no-predictor pretraining (same frames, 100 epochs)",
+    "E18": "Linear probes: what the pretrained encoders hold, organic and water like for like (measurement only)",
 }
 
 VARIANTS = ("plain", "normtarget", "resid", "proj", "residrel")
@@ -110,6 +113,12 @@ def classify(name):
         return f"E{m.group(1)}", f"pretrain-{m.group(2)}-ep{m.group(3)}", 0
     if re.fullmatch(r"e14_finetune_supervised_organic8_10pct_s\d", name):
         return "E14", "supervised-encoder", seed
+    m = re.fullmatch(r"e16_baseline_water16_10pct_(500|1400)ep_s\d", name)
+    if m:
+        return "E16", f"baseline-{m.group(1)}ep", seed
+    m = re.fullmatch(r"e17_(baseline|finetune_plain|finetune_nopred)_water16_all_s\d", name)
+    if m:
+        return "E17", m.group(1).replace("finetune_", ""), seed
     return None
 
 
