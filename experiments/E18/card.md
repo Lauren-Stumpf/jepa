@@ -40,7 +40,7 @@ Status: agreed (17 Nov 2026). Measurement only, no training of encoders.
 1. A linear probe shows what is easy to read out, not everything the features hold.
 2. A group is one run: 50 consecutive frames in the organic file, 80 in the water file (40 pairs with their reversed copies); the script stops if the file is not a whole number of groups. Organic keeps forward and reversed frames (every 5th frame); water with every 2nd frame keeps forward frames only.
 3. Frame temperature on water is fitted on about 10 runs, so its score is noisy.
-4. One regularisation strength is used for every encoder and quantity.
+4. One regularisation strength is used for every encoder and quantity. Every probe is fitted on at most 2,000 atoms (the same cap for organic and water), because a probe fitted on fewer rows overfits more and would score lower for that reason alone; the number of training atoms per element is recorded, and the random-number control is reported per element.
 
 **Measure and rule:** the table of scores; differences read only if larger than 0.05 in R² (no seeds here; one encoder each).
 

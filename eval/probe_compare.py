@@ -119,12 +119,21 @@ def mode_share(y):
     return counts.max() / len(y)
 
 
+MAX_TRAIN_ROWS = 2000   # set from --max_train_rows in main()
+
+
 def ridge_fit_score(Xtr, Ytr, Xte, Yte, lam):
-    """R^2 on the held-out rows of a ridge fit; nan if the quantity has no variance or too few rows."""
+    """R^2 on the held-out rows of a ridge fit; nan if the quantity has no variance or too few rows.
+    At most MAX_TRAIN_ROWS training rows are used (a fixed random subset), so that every element in
+    both systems is fitted on the same number of rows: with 640 features, a probe fitted on fewer
+    rows overfits more and scores lower for that reason alone."""
     ok_tr, ok_te = np.isfinite(Ytr), np.isfinite(Yte)
     if ok_tr.sum() < 50 or ok_te.sum() < 20:
         return float("nan"), int(ok_te.sum())
     Xtr, Ytr, Xte, Yte = Xtr[ok_tr], Ytr[ok_tr], Xte[ok_te], Yte[ok_te]
+    if len(Xtr) > MAX_TRAIN_ROWS:
+        pick = np.random.default_rng(len(Xtr)).choice(len(Xtr), MAX_TRAIN_ROWS, replace=False)
+        Xtr, Ytr = Xtr[pick], Ytr[pick]
     tot = ((Yte - Yte.mean()) ** 2).sum()
     if Ytr.std() < 1e-9 or tot < 1e-12 or mode_share(Ytr) > 0.98 or mode_share(Yte) > 0.98:
         return float("nan"), int(ok_te.sum())
@@ -146,9 +155,13 @@ def main():
     ap.add_argument("--group_frames", type=int, required=True)
     ap.add_argument("--cutoff", type=float, default=4.5)
     ap.add_argument("--lam", type=float, default=1e-2)
+    ap.add_argument("--max_train_rows", type=int, default=2000,
+                    help="training rows per probe; use the same value for organic and water")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
+    global MAX_TRAIN_ROWS
+    MAX_TRAIN_ROWS = args.max_train_rows
     device = "cuda" if torch.cuda.is_available() else "cpu"
     cfg, hypers, masses, timestep, info = load_config(args.config)
     data = PairData(args.xyz, masses)
@@ -173,7 +186,11 @@ def main():
     onehot = (Z[:, None] == np.array(elements)[None, :]).astype(float)
 
     res = {"file": args.xyz, "frames": len(frames), "groups": int(len(uniq)), "held_out_groups": len(test_groups),
-           "atoms": int(len(Z)), "held_out_atoms": int(is_test.sum()), "elements": elements, "targets": TARGETS, "encoders": {}}
+           "atoms": int(len(Z)), "held_out_atoms": int(is_test.sum()), "elements": elements, "targets": TARGETS,
+           "max_train_rows": MAX_TRAIN_ROWS,
+           "train_atoms_by_element": {str(z): int(((Z == z) & ~is_test).sum()) for z in elements},
+           "held_out_atoms_by_element": {str(z): int(((Z == z) & is_test).sum()) for z in elements}, "encoders": {}}
+    print("training atoms per element (capped at", MAX_TRAIN_ROWS, "per probe):", res["train_atoms_by_element"], flush=True)
     for spec in args.encoders:
         name, rest = spec.split("=", 1)
         kind, path = rest.split(":", 1)
@@ -211,6 +228,7 @@ def main():
             tr, te = (Z == z) & ~is_test, (Z == z) & is_test
             by[str(z)], w[str(z)] = ridge_fit_score(X[tr], noise[tr], X[te], noise[te], args.lam)
         enc["random_target_control"] = weighted(by, w)
+        enc["random_target_control_by_element"] = by
         res["encoders"][name] = enc
         print(f"{name:12s} random-target control {enc['random_target_control']:+.3f} | element {enc['targets']['element']['mean']:.2f} | "
               + " | ".join(f"{t[:22]} {enc['targets'][t]['mean']:.2f}" for t in TARGETS), flush=True)
