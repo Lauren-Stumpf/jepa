@@ -15,7 +15,8 @@ Quantities, per atom (none depends on how the frame is rotated):
                        the unit vector to the nearest neighbour (signed); size of the mass-scaled
                        momentum change over the stride
 
-Probe: ridge regression from the standardised 640 features (plus a constant) to each quantity,
+Probe: ridge regression (strength chosen per probe on an inner split of its training rows) from
+the standardised 640 features (plus a constant) to each quantity,
 fitted SEPARATELY for each element so that knowing the element cannot raise the score, on the
 training groups and scored on held-out groups. Groups are blocks of --group_frames consecutive
 frames of the file, chosen so that a group is one simulation run in both systems (organic: 50 =
@@ -120,6 +121,7 @@ def mode_share(y):
 
 
 MAX_TRAIN_ROWS = 2000   # set from --max_train_rows in main()
+LAM_GRID = (1e-2, 1e-1, 1.0, 10.0, 100.0)
 
 
 def ridge_fit_score(Xtr, Ytr, Xte, Yte, lam):
@@ -141,7 +143,20 @@ def ridge_fit_score(Xtr, Ytr, Xte, Yte, lam):
     A = np.c_[(Xtr - mu) / sd, np.ones(len(Xtr))]
     B = np.c_[(Xte - mu) / sd, np.ones(len(Xte))]
     ymu = Ytr.mean()
-    W = np.linalg.solve(A.T @ A + lam * len(A) * np.eye(A.shape[1]), A.T @ (Ytr - ymu))
+
+    def solve(Am, ym, strength):
+        return np.linalg.solve(Am.T @ Am + strength * len(Am) * np.eye(Am.shape[1]), Am.T @ ym)
+
+    if lam is None:
+        # choose the regularisation strength on an inner split of the TRAINING rows only (the
+        # held-out rows play no part), so a probe with few rows per feature is not left to overfit
+        inner = np.random.default_rng(len(A) + 1).random(len(A)) < 0.8
+        best, lam = np.inf, LAM_GRID[0]
+        for cand in LAM_GRID:
+            err = ((Ytr[~inner] - ymu - A[~inner] @ solve(A[inner], Ytr[inner] - ymu, cand)) ** 2).sum()
+            if err < best:
+                best, lam = err, cand
+    W = solve(A, Ytr - ymu, lam)
     res = ((Yte - (B @ W + ymu)) ** 2).sum()
     return float(1 - res / tot), int(ok_te.sum())
 
@@ -154,7 +169,8 @@ def main():
     ap.add_argument("--every", type=int, default=1)
     ap.add_argument("--group_frames", type=int, required=True)
     ap.add_argument("--cutoff", type=float, default=4.5)
-    ap.add_argument("--lam", type=float, default=1e-2)
+    ap.add_argument("--lam", type=float, default=None,
+                    help="ridge strength; default: chosen per probe from 0.01 to 100 on an inner split of the training rows")
     ap.add_argument("--max_train_rows", type=int, default=2000,
                     help="training rows per probe; use the same value for organic and water")
     ap.add_argument("--seed", type=int, default=0)
