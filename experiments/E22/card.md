@@ -1,6 +1,6 @@
 # E22: rolling out the water baseline: where does it go wrong?
 
-Status: proposed (18 Nov 2026). Card first; no code is written until it is agreed, and nothing runs until Lauren gives the go-ahead in writing.
+Status: agreed (18 Nov 2026), with both optional arms. Lauren gave the go-ahead to run; the code runs only after it passes independent review.
 
 **Why this exists:** the end goal is latent rollout: encode once, step forward many times in feature space, and recover positions and momenta at the end. Before building anything for that, we need to know whether our ordinary model has a rollout problem worth fixing, and if so what kind. Every result so far is one-step error. In the literature review ("Latent rollout: how other fields do it", 18 Nov), one paper (A control theory of predictability in latent world models, 2026) found that one-step validation error was essentially unrelated to planning success (rank correlation 0.02), while accuracy over rollouts was related (0.62).
 
@@ -16,8 +16,8 @@ Status: proposed (18 Nov 2026). Card first; no code is written until it is agree
 |---|---|---|---|---|---|---|
 | flashmd_water16_scratch (E00) | 8,960 | 8,960 | 168,000 | 0.0038 (one seed) | The model studied | The 28 water test runs: same liquid at 300 K, runs never seen |
 | flashmd_water16_scratch_10pct_s0 (E04 baseline, seed 0) | 896 | 896 | 5,600 | 0.0310 | Control: must be worse | Same |
-| Optional, Lauren to decide: E16 baseline 1,400 epochs, seeds 0 to 2 | 896 | 896 | 78,400 | 0.0061 | How rollout depends on one-step error, with three training seeds | Same |
-| Optional, Lauren to decide: E05 plain pretrained, seeds 0 to 2 | 8,960 (pretraining), 896 (labels) | 896 | 22,400 + 56,000 = 78,400 | 0.0063 | Same one-step error as the E16 arm: does pretraining change rollout behaviour? The last open benefit of one-step pretraining | Same |
+| E16 baseline 1,400 epochs, seeds 0 to 2 (included) | 896 | 896 | 78,400 | 0.0061 | How rollout depends on one-step error, with three training seeds | Same |
+| E05 plain pretrained, seeds 0 to 2 (included) | 8,960 (pretraining), 896 (labels) | 896 | 22,400 + 56,000 = 78,400 | 0.0063 | Same one-step error as the E16 arm: does pretraining change rollout behaviour? The last open benefit of one-step pretraining | Same |
 
 The two optional arms differ in how the same 78,400 steps were spent (and E05 saw more frames during pretraining); they are a check of behaviour, not a clean single-variable comparison.
 
@@ -32,13 +32,13 @@ The two optional arms differ in how the same 78,400 steps were spent (and E05 sa
 | Part | What | Length | Compared with |
 |---|---|---|---|
 | A1. Error growth | Position and momentum error against the reference at each step (mass-scaled, as the one-step error), by element | 2 ps (125 steps), as long as the reference | A3 |
-| A2. Error on its own outputs | Take the model's predicted state, run exact dynamics for 16 fs from it, and compare the model's next step with that. This is the one-step error measured on the model's own outputs. Done every 5th step for the first 2 ps, then every 50th step to 100 ps | 100 ps | First 2 ps: the model's one-step error on the true states at the same times. After that: its one-step test error (0.0038), since the liquid stays at equilibrium |
+| A2. Error on its own outputs | Take the model's predicted state, run exact dynamics for 16 fs from it, and compare the model's next step with that. This is the one-step error measured on the model's own outputs. Done every 5th step for the first 2 ps, then every 50th step to 100 ps | 100 ps | First 2 ps: the model's one-step error on the true states at the same times. After that: the model's mean one-step error on the true states of the first 2 ps on these runs (expected close to its test error, 0.0038), since the liquid stays at equilibrium |
 | A3. Chaos reference | For each start frame, two exact simulations: one with every position moved in a random direction by the size of the model's one-step position error (converted out of mass scaling, per element; momenta unchanged), and one rerun with no change, to measure the error from restarting at the stored precision (56 simulations in all). Their separation from the reference shows how fast two exact trajectories separate from an error of that size | 2 ps | A1, by the time for the error to double, not its level |
 | B. Drift and failure | Per run: temperature averaged over 10-ps windows; total energy (kinetic plus potential, the potential computed by the same force field); O–H bond lengths and H–O–H angles (bonds found by molecule, distances to the nearest periodic copy of each atom); oxygen–oxygen distance distribution; the first unphysical step (an O–H bond over 1.5 Å, two atoms closer than 0.7 Å, or an instantaneous temperature over 600 K) | 100 ps (6,250 steps) | Exact constant-energy dynamics keep total energy constant (the reference runs' own drift is read from i-PI's conserved-energy column); distributions pooled from the 28 reference runs |
 | C. Feature drift | For each element and each 10-ps window: the distance between the mean feature vector over all predicted states (pooled over the 28 rollouts) and the mean feature vector over all true states (pooled over the 28 reference runs), divided by the typical spread of features across atoms (as in E08). Noise level: the same distance between the reference pool and resamples of it (the 28 reference runs drawn with replacement, pooled the same way). The reference runs are 2 ps long, so this noise level is larger than for a 10-ps window, which makes the rule cautious | 100 ps | Drift counts if the distance exceeds 3 times the noise level |
 
 **Predictions (confidence):**
-- A2: the model's one-step error on its own outputs is larger than on true states. For the first 2 ps, "larger" means the mean of the per-run differences exceeds 3 standard errors of those differences; after 2 ps, the mean over the 28 runs exceeds 0.0038 by more than 3 standard errors across runs: Lauren's prediction, her confidence to be added; Claude's 60%.
+- A2: the model's one-step error on its own outputs is larger than on true states. For the first 2 ps, "larger" means the mean of the per-run differences exceeds 3 standard errors of those differences; after 2 ps, the mean over the 28 runs exceeds the model's one-step error on true states (above) by more than 3 standard errors across runs. Measured on momentum error, with position error reported beside it: Lauren's prediction, her confidence to be added; Claude's 60%.
 - A1 against A3: model error doubles faster than the chaos reference over the first 0.5 ps: Claude's 50%.
 - B: the 10-ps-averaged temperature, averaged over the runs, changes between the first and last window by more than 10 K and by more than 3 standard errors across runs: Claude's 55%. Total energy drift is reported on the same scale: 3.9 meV per molecule equals 10 K of kinetic energy.
 - B: at least one of the 28 rollouts becomes unphysical within 100 ps: Claude's 30%.
@@ -46,7 +46,7 @@ The two optional arms differ in how the same 78,400 steps were spent (and E05 sa
 
 **Controls:**
 - Works: the rollout code run for one step on the 1,120 test pairs reproduces eval/eval_onestep.py's predictions to floating-point precision.
-- Works: replaying the reference frames through the energy calculation reproduces the potential energy i-PI recorded, to within 1e-5 eV per frame.
+- Works: replaying the reference frames through the energy calculation reproduces the potential energy i-PI recorded, to within 1e-5 eV per frame; and 16 fs of exact dynamics from a stored frame reproduce the stored frame 16 fs later to within 1e-5 Å. Exact dynamics are run with the same force driver program as the data, from Python (eval/qtip4pf_ase.py).
 - Works: the model's output does not change when a frame is wrapped back into the box (the data's positions are unwrapped, so atoms may leave the box), checked on 10 frames.
 - Must fail (drift rule): the primary model's rollout with every momentum multiplied by 1.00002 after each step. Over 6,250 steps this adds about 85 K worth of kinetic energy; at constant energy about half of it moves into potential energy, so the temperature rises by about 40 K. The drift rule in B, applied to the difference from the unperturbed rollout of the same model, must flag it.
 - Must fail (failure detector): the same with momenta multiplied by 1.01 after each step (past 600 K within about 35 to 70 steps). The failure detector must stop it.
@@ -64,7 +64,7 @@ The two optional arms differ in how the same 78,400 steps were spent (and E05 sa
 
 **Cost:** GPU, inference only: about 1 to 2 hours each for the primary model, the E04 control and the drift must-fail rollout (the 28 starts run together); the failure-detector rollout stops within minutes; 6 to 12 hours more if both optional arms (6 models) are run. CPU: the force-field energy of the rolled-out frames; about 4,200 short exact simulations of 16 fs for A2 (700 in the first 2 ps, 3,500 after); 56 exact simulations of 2 ps for A3 (one thread each, as the data runs).
 
-**Code needed after the card is agreed** (reviewed by an independent agent before anything runs): a rollout script, an analysis script for parts A to C, and a script for the exact simulations and the energy replay with i-PI and the force field.
+**Code** (reviewed by an independent agent before anything runs): eval/rollout_water.py (rollouts and the one-step and wrap checks), eval/qtip4pf_ase.py (exact force field and its checks), eval/rollout_exact.py (A2, A3, energies), eval/rollout_analysis.py (every measure, verdict and figure), scripts/run_e22.sh (runs it all in order and stops at the first failed check).
 
 **Later, not now:** the same on organic molecules. Their reference runs are only 392 fs long, so a longer reference would have to be computed with PET-MAD (the machine-learned potential that generated the organic data).
 
