@@ -1,6 +1,6 @@
 # E19: do the pretrained features depend on direction, and can directions be read out of them?
 
-Status: agreed (17 Nov 2026). Measurement only.
+Status: done (17 Nov 2026). Measurement only.
 
 **Why this exists:** E18 found that from the water encoders that give a gain almost nothing can be read out: not momentum, not bond lengths, for the best one not even the element. But every quantity in E18 was one that does not change when the frame is rotated. The features are known to be full of something (about 507 independent directions of variation, steady over 16 fs, different between atoms). One candidate E18 could not see: which way things point in the frame of the simulation box, for example the direction from an atom to its neighbours. Water molecules turn slowly compared with 16 fs, both frames of a pretraining pair get the same rotation, and the task predicts arrows (displacement, momentum), so direction would be steady, allowed and useful.
 

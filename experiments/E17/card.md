@@ -37,11 +37,13 @@ Test momentum error, tested on water test frames (the same liquid as training, i
 
 Both predictions failed: the gain did not shrink to under a third of its 10% value (plain 12% here against 12% at 10%; no predictor 12% against 27%), and both pretrained arms pass the seed rule.
 
+Control: the 100-epoch baseline (0.0069) landed above the 300-epoch baseline (0.0038), as expected.
+
 But the pretrained arms had 40% more optimiser steps (assumption 2). After E16 this result cannot be read as a benefit of pretraining. The baseline trained longer on the same labels (300 epochs) reaches 0.0038, far below both pretrained arms.
 
 ## Assumptions check
-- Assumption 2 (the pretrained arms have 22,400 extra steps) turned out to be the deciding issue after E16. E20 trains the baseline for 140 epochs (78,400 steps) to match.
+- Assumption 2 (the pretrained arms have 22,400 extra steps) turned out to be the deciding issue after E16. E21 trains the baseline for 140 epochs (78,400 steps) to match.
 - One pretraining seed per variant.
 
 ## Next
-E20: baseline with all labels at 140 epochs, the same 78,400 total steps as the pretrained arms.
+E21: baseline with all labels at 140 epochs, the same 78,400 total steps as the pretrained arms.

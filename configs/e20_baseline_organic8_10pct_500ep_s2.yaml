@@ -12,7 +12,7 @@ wandb:
   project: jepa-flashmd-experiments
   name: e20_baseline_organic8_10pct_500ep_s2
   group: E20
-  job_type: organic-baseline-500ep
+  job_type: baseline-500ep
 
 architecture:
   name: experimental.flashmd
@@ -28,7 +28,7 @@ architecture:
     timestep: 8            # fs; the Zenodo file is the 8 fs stride
     masses: {1: 1.00794, 6: 12.0107, 7: 14.00674, 8: 15.9994}  # i-PI masses used to generate the file
     batch_size: 16
-    num_epochs: 500          # E20: five times the 100-epoch baseline (262,500 steps)
+    num_epochs: 500          # E20: 262,500 optimiser steps
     learning_rate: 3.0e-4   # paper, App. B.1
     warmup_fraction: 0.01
     log_interval: 1

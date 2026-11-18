@@ -49,14 +49,14 @@ Test momentum error, tested on organic test frames (molecules never seen in trai
 | Plain, 200 epochs (26,400 steps) | 0.0248, 0.0243, 0.0243 | 0.0245 | 8% worse | worse |
 | No predictor, 200 epochs | 0.0243, 0.0253, 0.0241 | 0.0246 | 9% worse | worse |
 
-Prediction 1 ("pretrained arms no better than the baseline", 80%) held. Prediction 2 ("no predictor at least as good as plain", 60%): the two are equal within the seed spread at both lengths.
+Prediction 1 ("pretrained arms no better than the baseline", 80%) held. Prediction 2 ("no predictor at least as good as plain", 60%) failed at 20 epochs: every plain seed (0.0222 to 0.0225) beats every no-predictor seed (0.0226 to 0.0227), a 1% difference. At 200 epochs it held: the seeds overlap.
 
-Short pretraining on organic changes nothing; long pretraining makes the model worse. The predictor makes no difference. This is the opposite of water, where long pretraining was needed for any gain (E13).
+Short pretraining on organic changes nothing against the baseline; long pretraining makes the model worse. The predictor makes at most a 1% difference. This is the opposite of water, where long pretraining was needed for any gain (E13).
 
 ## Assumptions check
-- No pretraining collapsed.
+- Collapse of the pretrained encoders was not checked directly.
 - Assumption 1 (the 10% organic subset has no time-reversed copies) still stands as a difference from E01; E15 and E01 agree that pretraining does not help, so it does not change the conclusion.
 - One pretraining seed per arm.
 
 ## Next
-E16 showed the water gain was extra optimiser steps. The organic 10% baseline already had 52,500 steps, nine times the water baseline, so one explanation of this result is that organic training was already close to finished. E20 tests this with a 500-epoch organic baseline.
+E16 showed the water gain was extra optimiser steps. The organic 10% baseline already had 52,500 steps, nine times the water baseline, so one explanation of this result is that organic training was already close to finished. E20 tests this with organic baselines of 150 epochs (the same total steps as the 200-epoch pretrained arms) and 500 epochs.

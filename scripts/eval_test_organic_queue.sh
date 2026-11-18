@@ -23,7 +23,7 @@ runs() {
     echo e12_finetune_plain_gap100_organic8_10pct_s$s
     echo e14_finetune_supervised_organic8_10pct_s$s
     for p in plain nopred; do for e in 20 200; do echo e15_finetune_${p}_same10_ep${e}_organic8_10pct_s$s; done; done
-    echo e20_baseline_organic8_10pct_500ep_s$s
+    for e in 150 500; do echo e20_baseline_organic8_10pct_${e}ep_s$s; done
   done
 }
 
