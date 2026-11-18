@@ -140,10 +140,11 @@ def check_onestep(model, config, test_xyz, masses_z, device, batch=28):
         qb, pb = batched_step(model, numbers, q, p, cell, masses, device)
         for j, a in enumerate(chunk):
             q1, p1 = _metatrain_one_step(a, model, STRIDE_FS, device, True, False, masses_z)
-            worst_q = max(worst_q, float(np.abs(qb[j] - q1).max()))
+            # relative to the size of the coordinate: float32 rounding grows with |x| (positions are unwrapped)
+            worst_q = max(worst_q, float((np.abs(qb[j] - q1) / np.maximum(np.abs(q1), 1.0)).max()))
             worst_p = max(worst_p, float(np.abs(pb[j] - p1).max() / np.sqrt((p1 ** 2).mean())))
     print(f"batched step against eval_onestep on {len(frames)} test pairs: largest position difference "
-          f"{worst_q:.2e} A, largest momentum difference {worst_p:.2e} of the momentum spread")
+          f"{worst_q:.2e} (relative to the coordinate, or absolute in A below 1 A), largest momentum difference {worst_p:.2e} of the momentum spread")
     ok = worst_q <= 1e-5 and worst_p <= 1e-5
     print("PASS" if ok else "FAIL")
     return ok

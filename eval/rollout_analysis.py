@@ -125,7 +125,8 @@ def features_c(args, r, device):
     from metatomic.torch import load_atomistic_model
     exported = dict(load_atomistic_model(str(r["model"])).module.named_parameters())
     common = [k for k, _ in enc.named_parameters() if k in exported]
-    assert common, "no shared parameter names between model.ckpt and model.pt"
+    missing = [k for k, _ in enc.named_parameters() if k not in exported]
+    assert not missing, f"encoder parameters not found in model.pt: {missing[:5]}"
     worst = max(float((dict(enc.named_parameters())[k].detach().cpu().double() - exported[k].detach().cpu().double()).abs().max()) for k in common)
     assert worst < 1e-6, f"model.ckpt encoder differs from model.pt by {worst}"
     print(f"encoder in model.ckpt equals model.pt on {len(common)} parameters")

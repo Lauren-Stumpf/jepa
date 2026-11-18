@@ -50,8 +50,12 @@ class QTIP4PF(Calculator):
         self.socket_name = f"e22_{os.getpid()}_{uuid.uuid4().hex[:8]}"
         self.server = SocketServer(unixsocket=self.socket_name, timeout=120)
         self._log = open(log_path, "w") if log_path else subprocess.DEVNULL
-        self.proc = subprocess.Popen([driver, "-u", "-a", self.socket_name, "-m", "qtip4pf"],
-                                     stdout=self._log, stderr=subprocess.STDOUT)
+        try:
+            self.proc = subprocess.Popen([driver, "-u", "-a", self.socket_name, "-m", "qtip4pf"],
+                                         stdout=self._log, stderr=subprocess.STDOUT)
+        except BaseException:
+            self.server.close()      # removes the socket file
+            raise
         # lets ASE notice a driver that dies before connecting instead of waiting forever
         self.server.proc = self.proc
 
