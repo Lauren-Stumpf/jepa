@@ -45,12 +45,12 @@ The two optional arms differ in how the same 78,400 steps were spent (and E05 sa
 - C: features drift by the rule above in at least one element: Lauren's prediction, her confidence to be added; Claude's 60%.
 
 **Controls:**
-- Works: the rollout code run for one step on the 1,120 test pairs reproduces eval/eval_onestep.py's predictions to floating-point precision.
-- Works: replaying the reference frames through the energy calculation reproduces the potential energy i-PI recorded, to within 1e-5 eV per frame; and 16 fs of exact dynamics from a stored frame reproduce the stored frame 16 fs later to within 1e-5 Å. Exact dynamics are run with the same force driver program as the data, from Python (eval/qtip4pf_ase.py).
+- Works: the rollout code run for one step on the 1,120 test pairs reproduces eval/eval_onestep.py's predictions to within 1e-5 (floating-point precision).
+- Works: replaying stored frames through the energy calculation reproduces the potential energy i-PI recorded, to within 5e-3 eV per frame; and 16 fs of exact dynamics from a stored frame reproduce the stored frame 16 fs later, to within twice the rounding of the stored positions (i-PI stores 6 significant figures, so positions far from the box are stored to 1e-4 or 1e-3 Å) and 1% of the momentum spread. Must fail: the same with a 0.26 fs time step. Exact dynamics are run with the same force driver program as the data, from Python (eval/qtip4pf_ase.py).
 - Works: the model's output does not change when a frame is wrapped back into the box (the data's positions are unwrapped, so atoms may leave the box), checked on 10 frames.
 - Must fail (drift rule): the primary model's rollout with every momentum multiplied by 1.00002 after each step. Over 6,250 steps this adds about 85 K worth of kinetic energy; at constant energy about half of it moves into potential energy, so the temperature rises by about 40 K. The drift rule in B, applied to the difference from the unperturbed rollout of the same model, must flag it.
 - Must fail (failure detector): the same with momenta multiplied by 1.01 after each step (past 600 K within about 35 to 70 steps). The failure detector must stop it.
-- Must be worse: the E04 baseline (seed 0, one-step error 0.0310) must have a larger A1 error than the primary model at every step of the first 0.5 ps, averaged over runs.
+- Must be worse: the E04 baseline (seed 0, one-step error 0.0310) must have a larger A1 error, in both position and momentum, than the primary model at every step of the first 0.5 ps, averaged over runs.
 
 **Assumptions:**
 1. 2 ps of reference is long enough for A1 and A3; whether exact trajectories separate within that time is measured by A3, not assumed.

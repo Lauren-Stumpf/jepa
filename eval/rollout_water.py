@@ -144,7 +144,7 @@ def check_onestep(model, config, test_xyz, masses_z, device, batch=28):
             worst_p = max(worst_p, float(np.abs(pb[j] - p1).max() / np.sqrt((p1 ** 2).mean())))
     print(f"batched step against eval_onestep on {len(frames)} test pairs: largest position difference "
           f"{worst_q:.2e} A, largest momentum difference {worst_p:.2e} of the momentum spread")
-    ok = worst_q <= 1e-4 and worst_p <= 1e-4
+    ok = worst_q <= 1e-5 and worst_p <= 1e-5
     print("PASS" if ok else "FAIL")
     return ok
 
@@ -194,9 +194,10 @@ def main():
     starts, refs = [], []
     for d in runs:
         r = read_run(d)
-        starts.append(r)
-        # reference states every 16 fs for the first 2 ps (A1 and the true-state half of A2)
-        refs.append((r["q"][::RAW_PER_STEP], r["p"][::RAW_PER_STEP]))
+        # keep only what is used (frame 0, and every 16 fs for the first 2 ps), not 8,001 frames per run
+        refs.append((r["q"][::RAW_PER_STEP].copy(), r["p"][::RAW_PER_STEP].copy()))
+        starts.append({"q": r["q"][:1].copy(), "p": r["p"][:1].copy(), "numbers": r["numbers"], "cell": r["cell"]})
+        del r
     numbers, cell = starts[0]["numbers"], starts[0]["cell"]
     assert all((s["numbers"] == numbers).all() and np.allclose(s["cell"], cell) for s in starts)
     check_order(numbers)

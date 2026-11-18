@@ -83,7 +83,7 @@ def window_means(T, stopped_at):
     for w in range(n):
         a, b = w * WINDOW, (w + 1) * WINDOW
         for r in range(T.shape[1]):
-            if stopped_at[r] == -1 or stopped_at[r] > b:
+            if stopped_at[r] == -1 or stopped_at[r] >= b:   # stopped at step b: temperatures valid for all of [a, b)
                 out[w, r] = T[a:b, r].mean()
     return out
 
@@ -121,6 +121,14 @@ def features_c(args, r, device):
     from train.pretrain_jepa import load_config
     cfg, hypers, masses_z, timestep, info = load_config(args.config)
     enc = load_encoder("baseline", args.checkpoint, hypers, info, masses_z, timestep, device)
+    # the encoder read from model.ckpt must be the one inside the rolled-out model.pt
+    from metatomic.torch import load_atomistic_model
+    exported = dict(load_atomistic_model(str(r["model"])).module.named_parameters())
+    common = [k for k, _ in enc.named_parameters() if k in exported]
+    assert common, "no shared parameter names between model.ckpt and model.pt"
+    worst = max(float((dict(enc.named_parameters())[k].detach().cpu().double() - exported[k].detach().cpu().double()).abs().max()) for k in common)
+    assert worst < 1e-6, f"model.ckpt encoder differs from model.pt by {worst}"
+    print(f"encoder in model.ckpt equals model.pt on {len(common)} parameters")
     numbers = r["numbers"]; types = torch.tensor(numbers, dtype=torch.int32)
     cell = torch.tensor(np.diag(r["cell"]))
     elements = sorted(set(numbers.tolist()))
@@ -211,9 +219,18 @@ def main():
                          "restart_error_max": float(np.nanmax(restart_mean[:, j]))}
     dm, dc = S["A1"]["momentum"]["model_doubling_fs"], S["A1"]["momentum"]["chaos_doubling_fs"]
     lim = HALF_PS_STEPS * STRIDE_FS
+    S["A1"]["by_element"] = {}
+    for z, lab in ((8, "oxygen"), (1, "hydrogen")):
+        sel = r["numbers"] == z
+        sub = dict(r); sub["masses"] = r["masses"][sel]; sub["q"] = r["q"][:, :, sel]; sub["p"] = r["p"][:, :, sel]
+        sub["ref_q"] = r["ref_q"][:, :, sel]; sub["ref_p"] = r["ref_p"][:, :, sel]
+        cz = np.nanmean(a1_curves(sub), axis=1)
+        S["A1"]["by_element"][lab] = {"momentum_error_at_steps_1_31_125": [float(cz[k, 1]) for k in (1, HALF_PS_STEPS, len(cz) - 1)],
+                                      "position_error_at_steps_1_31_125": [float(cz[k, 0]) for k in (1, HALF_PS_STEPS, len(cz) - 1)]}
     S["A1"]["prediction_model_doubles_faster_within_0.5ps"] = bool(dm is not None and dm <= lim and (dc is None or dm < dc))
     S["controls"] = {}
     if worse_mean is not None:
+        # both position and momentum error must be larger at every step of the first 0.5 ps
         S["controls"]["must_be_worse"] = bool(np.all(worse_mean[1:HALF_PS_STEPS + 1] > a1_mean[1:HALF_PS_STEPS + 1]))
 
     fig, ax = plt.subplots(1, 2, figsize=(11, 4), dpi=130)
@@ -260,7 +277,7 @@ def main():
                           for b in range(B) if stopped[b] != -1},
               "any_unphysical_within_100ps": bool((stopped != -1).any())}
     es = list(x["energy_steps"]); etot = (x["epot"] + x["ekin"]) / n_mol * 1000      # meV per molecule
-    first = [i for i, k in enumerate(es) if k < WINDOW]; last = [i for i, k in enumerate(es) if k >= len(T) - 1 - WINDOW]
+    first = [i for i, k in enumerate(es) if k < WINDOW and k % 10 == 0]; last = [i for i, k in enumerate(es) if k >= len(T) - 1 - WINDOW]
     de = np.nanmean(etot[last], axis=0) - np.nanmean(etot[first], axis=0)
     ok_last = [b for b in range(B) if stopped[b] == -1]
     de = de[ok_last]

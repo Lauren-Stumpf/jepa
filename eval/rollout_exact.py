@@ -37,7 +37,9 @@ _calc = None
 
 def _init():
     global _calc
+    from multiprocessing.util import Finalize
     _calc = QTIP4PF()
+    Finalize(None, _calc.close, exitpriority=10)   # stop the driver and remove its socket when the worker exits
 
 
 def ms_rmse(q, p, q_ref, p_ref, masses):
@@ -121,6 +123,8 @@ def main():
         a2_res = pool.map(_a2, jobs, chunksize=4)
         a3_res = pool.map(_a3, a3_jobs, chunksize=1) if a3_jobs else []
         e_res = pool.map(_energy, e_jobs, chunksize=16)
+        pool.close()
+        pool.join()        # let the workers exit normally so their drivers are closed
 
     a2_own = np.full((len(a2_steps), B, 2), np.nan)
     ki = {k: i for i, k in enumerate(a2_steps)}
