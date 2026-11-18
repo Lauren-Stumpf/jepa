@@ -44,8 +44,8 @@ REFERENCES = {
             ("E13", "plain-ep200", "plain: 200 pretraining + 100 labelled epochs (E13)"),
             ("E13", "nopred-ep200", "no predictor: 200 pretraining + 100 labelled epochs (E13)"),
             ("E05", "plain", "plain: pretraining + 1,000 labelled epochs (E05)")],
-    # E20: the new arms are compared with E01's 100-epoch baseline (labelled "baseline"); E15's
-    # 200-epoch pretrained arms total 78,900 steps, the same as the 150-epoch arm (78,750)
+    # E20: the 500-epoch arm is compared with E01's 100-epoch baseline (labelled "baseline");
+    # E15's 200-epoch pretrained arms are shown for context
     "E20": [("E01", "baseline", "baseline"),
             ("E15", "plain-ep200", "plain: 200 pretraining + 100 labelled epochs (E15)"),
             ("E15", "nopred-ep200", "no predictor: 200 pretraining + 100 labelled epochs (E15)")],

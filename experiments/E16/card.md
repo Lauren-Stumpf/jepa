@@ -38,7 +38,7 @@ Test momentum error, tested on water test frames (the same liquid as training, i
 | Arm | Total steps | Seeds | Mean | Compared with | Seed rule |
 |---|---|---|---|---|---|
 | Baseline, 100 epochs (E04) | 5,600 | 0.0310, 0.0286, 0.0313 | 0.0303 | | |
-| **Baseline, 500 epochs** | 28,000 | 0.0105, 0.0106, 0.0109 | **0.0107** | E11 no predictor on all frames, 22,400 + 5,600 steps: 0.0220 (the best pretrained arm at 28,000 steps; E13 no predictor on the same frames: 0.0234) | baseline better |
+| **Baseline, 500 epochs** | 28,000 | 0.0105, 0.0106, 0.0109 | **0.0107** | E11 no predictor on all frames, 22,400 + 5,600 steps: 0.0220 (the best pretrained arm with three seeds at 28,000 steps; E13 no predictor on the same frames: 0.0234) | baseline better |
 | Baseline, 1,000 epochs (E05) | 56,000 | 0.0079, 0.0073, 0.0070 | 0.0074 | | |
 | **Baseline, 1,400 epochs** | 78,400 | 0.0063, 0.0061, 0.0060 | **0.0061** | E05 plain, pretraining + 1,000 epochs: 0.0063 (0.0062 to 0.0064) | overlap: equal |
 

@@ -41,7 +41,7 @@ architecture:
 
 training_set:
   systems:
-    read_from: data/water/pairs/16fs/train.xyz   # E17: all 8,960 frames labelled
+    read_from: data/water/pairs/16fs/train.xyz   # E21: all 8,960 frames labelled
     length_unit: A
   targets:
     position:

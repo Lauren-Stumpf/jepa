@@ -94,7 +94,7 @@ Also: before comparing against a baseline, check that more training no longer im
 | E17 | Water, all the labels: baseline against pretraining | done |
 | E18 | Linear probes: what the encoders hold, organic and water | done |
 | E19 | Direction in the features: rotation sensitivity and direction probes | done |
-| E20 | Organic, 10% of the labels: baseline for 150 epochs (steps matched to E15) and 500 epochs | proposed |
+| E20 | Organic, 10% of the labels: is the baseline still improving? (500 epochs) | proposed |
 | E21 | Water, all the labels: baseline with the same total steps as the E17 pretrained arms | proposed |
 | E22 | Rolling out the water baseline: error growth, error on its own outputs, drift, failure, feature drift | proposed |
 

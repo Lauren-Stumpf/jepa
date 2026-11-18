@@ -1,7 +1,4 @@
 # name|kind|min GPU memory (MB)|runs per GPU|spec   (scripts/launch_runs.sh)
-e20_baseline_organic8_10pct_150ep_s0|train|20000|1|configs/e20_baseline_organic8_10pct_150ep_s0.yaml
-e20_baseline_organic8_10pct_150ep_s1|train|20000|1|configs/e20_baseline_organic8_10pct_150ep_s1.yaml
-e20_baseline_organic8_10pct_150ep_s2|train|20000|1|configs/e20_baseline_organic8_10pct_150ep_s2.yaml
 e20_baseline_organic8_10pct_500ep_s0|train|20000|1|configs/e20_baseline_organic8_10pct_500ep_s0.yaml
 e20_baseline_organic8_10pct_500ep_s1|train|20000|1|configs/e20_baseline_organic8_10pct_500ep_s1.yaml
 e20_baseline_organic8_10pct_500ep_s2|train|20000|1|configs/e20_baseline_organic8_10pct_500ep_s2.yaml

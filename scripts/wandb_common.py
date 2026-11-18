@@ -44,7 +44,7 @@ EXPERIMENTS = {
     "E16": "Water: baseline trained for as many optimiser steps as the pretrained arms get in total (500 and 1,400 epochs)",
     "E17": "Water, all the labels: baseline against plain and no-predictor pretraining (same frames, 100 epochs)",
     "E18": "Linear probes: what the pretrained encoders hold, organic and water like for like (measurement only)",
-    "E20": "Organic, 10% of the labels: baseline trained for 150 epochs (steps matched to E15) and 500 epochs",
+    "E20": "Organic, 10% of the labels: is the baseline still improving? Trained for 500 epochs instead of 100",
     "E21": "Water, all the labels: baseline trained for 140 epochs, the same total steps as the E17 pretrained arms",
 }
 
@@ -121,7 +121,7 @@ def classify(name):
     m = re.fullmatch(r"e17_(baseline|finetune_plain|finetune_nopred)_water16_all_s\d", name)
     if m:
         return "E17", m.group(1).replace("finetune_", ""), seed
-    m = re.fullmatch(r"e20_baseline_organic8_10pct_(150|500)ep_s\d", name)
+    m = re.fullmatch(r"e20_baseline_organic8_10pct_(500)ep_s\d", name)
     if m:
         return "E20", f"baseline-{m.group(1)}ep", seed
     if re.fullmatch(r"e21_baseline_water16_all_140ep_s\d", name):
