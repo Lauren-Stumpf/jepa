@@ -55,6 +55,8 @@ class QTIP4PF(Calculator):
                                          stdout=self._log, stderr=subprocess.STDOUT)
         except BaseException:
             self.server.close()      # removes the socket file
+            if self._log is not subprocess.DEVNULL:
+                self._log.close()
             raise
         # lets ASE notice a driver that dies before connecting instead of waiting forever
         self.server.proc = self.proc
