@@ -59,6 +59,17 @@ Runs: <list, or see runs.txt>; cost: <GPU hours>
 
 Every card and every results table states which frames a number was measured on and whether the model had seen that system: for water, validation and test frames are the same liquid as training (other runs); for organic, they are molecules never seen in training. A comparison between water and organic runs organic both ways (seen molecules and unseen molecules). A probe that finds nothing shows only that a linear read-out failed, not that the information is absent.
 
+## Rule added 18 Nov 2026: what each arm gets
+
+Every card that compares arms has this table before anything is launched:
+
+| Arm | Frames seen | Labels seen | Total optimiser steps | Compared with | Tested on |
+|---|---|---|---|---|---|
+
+Under it, one line: what does each compared arm get that the other does not? If the answer is more than the one varied thing, the comparison is not launched. Pretraining brought two hidden extras with it in E01 to E17 (more frames, then more steps); this table would have shown both.
+
+Also: before comparing against a baseline, check that more training no longer improves the baseline. The 100-epoch water baseline was far from finished (E16).
+
 ## Index
 
 | Id | Experiment | Status |
@@ -78,9 +89,12 @@ Every card and every results table states which frames a number was measured on 
 | E12 | Organic pretraining with pairs 100 fs apart | done |
 | E13 | Water pretraining on only the frames the baseline sees | done |
 | E14 | Control that must work: full-data organic encoder through the checkpoint route | done |
-| E15 | Organic pretraining on only the frames the baseline sees (plain and no predictor) | running |
-| E16 | Water: baseline with as many training steps as the pretrained arms | running |
-| E17 | Water, all the labels: baseline against pretraining | running |
+| E15 | Organic pretraining on only the frames the baseline sees (plain and no predictor) | done |
+| E16 | Water: baseline with as many training steps as the pretrained arms | done |
+| E17 | Water, all the labels: baseline against pretraining | done |
 | E18 | Linear probes: what the encoders hold, organic and water | done |
+| E19 | Direction in the features: rotation sensitivity and direction probes | done |
+| E20 | Close-out: longer baselines (organic 10% for 500 epochs; water all labels, steps matched to E17) | proposed |
+| E21 | Rolling out the water baseline: error growth, drift, failure, feature gap | proposed |
 
 Note (16 Nov 2026): in E01, E04, E05, E06, E11 and E12 the pretrained arm was pretrained on all training frames and the baseline saw 10% of them, so those comparisons are confounded with extra data. See notes/decisions.md and experiments/INSTRUCTIONS_E13_E15.md.

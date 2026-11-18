@@ -44,6 +44,11 @@ REFERENCES = {
             ("E13", "plain-ep200", "plain: 200 pretraining + 100 labelled epochs (E13)"),
             ("E13", "nopred-ep200", "no predictor: 200 pretraining + 100 labelled epochs (E13)"),
             ("E05", "plain", "plain: pretraining + 1,000 labelled epochs (E05)")],
+    "E20": [("E01", "baseline", "organic baseline, 100 epochs (E01)"),
+            ("E15", "plain-ep200", "organic plain: 200 pretraining + 100 labelled epochs (E15)"),
+            ("E17", "baseline", "water all labels, baseline 100 epochs (E17)"),
+            ("E17", "plain", "water all labels, plain pretrained (E17)"),
+            ("E17", "nopred", "water all labels, no predictor (E17)")],
 }
 
 MEASURES = [(VAL_P, "Validation momentum error"), (TEST_P, "Test momentum error"),

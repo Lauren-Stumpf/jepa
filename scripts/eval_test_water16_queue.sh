@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Test-set evaluation of every water 16 fs run trained on the 10% subset (E04, E05, E06, E11, E13, E16), and of the E17 runs trained on all the labels.
+# Test-set evaluation of every water 16 fs run trained on the 10% subset (E04, E05, E06, E11, E13, E16), and of the E17 and E20 runs trained on all the labels.
 # The command is the one used for the full-data water baseline
 # (results/eval/test/run_eval_test.sh): all 1,120 test frames, mass-scaled targets.
 # eval/eval_onestep.py reads only the atomic masses from --config, which are the same in
@@ -29,6 +29,7 @@ runs() {
     for p in plain nopred; do for e in 20 200; do echo e13_finetune_${p}_same10_ep${e}_water16_10pct_s$s; done; done
     for e in 500 1400; do echo e16_baseline_water16_10pct_${e}ep_s$s; done
     for a in baseline finetune_plain finetune_nopred; do echo e17_${a}_water16_all_s$s; done
+    echo e20_baseline_water16_all_140ep_s$s
   done
 }
 

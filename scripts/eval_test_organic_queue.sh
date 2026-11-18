@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Test-set evaluation of the organic 10% runs of E12, E14 and E15, as they finish.
+# Test-set evaluation of the organic 10% runs of E12, E14, E15 and E20, as they finish.
 # The command is the one used for every organic test result so far (E01, E03; see
 # experiments/E07/card.md): data/organic8/test.xyz, every 5th frame from frame 0, 2,100 frames,
 # mass-scaled targets, the organic config's masses.
@@ -23,6 +23,7 @@ runs() {
     echo e12_finetune_plain_gap100_organic8_10pct_s$s
     echo e14_finetune_supervised_organic8_10pct_s$s
     for p in plain nopred; do for e in 20 200; do echo e15_finetune_${p}_same10_ep${e}_organic8_10pct_s$s; done; done
+    echo e20_baseline_organic8_10pct_500ep_s$s
   done
 }
 

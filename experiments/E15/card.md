@@ -1,6 +1,6 @@
 # E15: organic pretraining on only the frames the baseline sees (3 seeds)
 
-Status: proposed (16 Nov 2026). Not yet run.
+Status: done (results 18 Nov 2026).
 
 **Why this exists:** the only same-frames comparison we have on organic molecules is E02 (all labels, one variant, one seed: 4% worse). E01 gave pretraining 10 times more frames than the baseline and it was still worse. This experiment fills the "same frames" cell for organic properly, and it is the organic twin of E13. It also tries the no-predictor objective on organic for the first time.
 
@@ -39,10 +39,24 @@ Status: proposed (16 Nov 2026). Not yet run.
 **Runs:** 4 pretrainings (about 1 hour each at 20 epochs, about 9 hours each at 200 epochs, 24 GB card; the full validation set is evaluated every epoch) and 12 training runs (about 2.5 hours each, 24 GB card), then test evaluation.
 
 ## Result
-(to be filled in)
+Test momentum error, tested on organic test frames (molecules never seen in training), 3 training seeds each:
+
+| Arm | Seeds | Mean | Against baseline | Seed rule against baseline |
+|---|---|---|---|---|
+| Baseline (E01) | 0.0223, 0.0224, 0.0231 | 0.0226 | | |
+| Plain, 20 epochs (2,640 steps) | 0.0222, 0.0223, 0.0225 | 0.0223 | 1% better | overlap |
+| No predictor, 20 epochs | 0.0226, 0.0226, 0.0227 | 0.0226 | equal | overlap |
+| Plain, 200 epochs (26,400 steps) | 0.0248, 0.0243, 0.0243 | 0.0245 | 8% worse | worse |
+| No predictor, 200 epochs | 0.0243, 0.0253, 0.0241 | 0.0246 | 9% worse | worse |
+
+Prediction 1 ("pretrained arms no better than the baseline", 80%) held. Prediction 2 ("no predictor at least as good as plain", 60%): the two are equal within the seed spread at both lengths.
+
+Short pretraining on organic changes nothing; long pretraining makes the model worse. The predictor makes no difference. This is the opposite of water, where long pretraining was needed for any gain (E13).
 
 ## Assumptions check
-(to be filled in)
+- No pretraining collapsed.
+- Assumption 1 (the 10% organic subset has no time-reversed copies) still stands as a difference from E01; E15 and E01 agree that pretraining does not help, so it does not change the conclusion.
+- One pretraining seed per arm.
 
 ## Next
-(to be filled in)
+E16 showed the water gain was extra optimiser steps. The organic 10% baseline already had 52,500 steps, nine times the water baseline, so one explanation of this result is that organic training was already close to finished. E20 tests this with a 500-epoch organic baseline.
