@@ -617,7 +617,22 @@ Hypotheses for "no gain with equal data and steps", with status:
 3. No extra information: the label is the later frame, which pretraining also sees; unlabelled frames of the same liquid or the same molecules add little. Partly tested (10 times more unlabelled frames gave no gain at equal steps); transfer from another system not tested.
 4. The predictor is too weak: it maps each atom's features to its own future features with no access to neighbours, so the only way to make the future predictable is to make features that do not change. Supported indirectly (predictors worse than copying except relative loss); a predictor with message passing not tested.
 5. Orientation shortcut: both frames share one rotation, so orientation in the box is a free matching signal. E23 part 2 tests it.
-6. The regulariser shapes the features badly: 512 unit-variance, uncorrelated dimensions are forced from the atoms of a small batch (8 frames on water, two elements). Weights, batch size and feature width not studied; projector variant was the worst.
+6. The regulariser shapes the features badly: 640 unit-variance, uncorrelated dimensions are forced from the atoms of a small batch (8 frames on water, two elements). Weights, batch size and feature width not studied; projector variant was the worst.
 7. Pretraining only changes the scale or conditioning of the starting weights (an optimisation effect, not information). Would explain the early lead and the partial substitution for steps on water. Test: a random start rescaled layer by layer to the pretrained weights' statistics. Not tested.
 8. Labelled training overwrites the pretrained features at once. Tested on organic by freezing (E03): not supported.
+
+## 20 Nov 2026 (later): deep dive on why pretraining does not help
+
+Document: https://claude.ai/artifact/9SqGJY3qrzteSPSwm5ySJ5 (hypotheses with evidence for and against, literature, tests). No new runs. The cluster was unreachable all day, so E21 and E22 are still unread.
+
+Reading of the existing results:
+- For pretraining to improve the final model four conditions must hold; three do not. (1) The unlabelled frames hold nothing the labelled frames lack: same runs, molecules and liquid (E13: pretraining on the 896 labelled frames gives the same gain as on all 8,960; the organic 10% covers all 168 training molecules). (2) The objective is satisfied by slow features (E08, E18; reported by Sobal et al. 2022, MotionJEPA 2026, Toso et al. 2026, Gulati and Nemenman 2026). (3) What is learned carries over only as an early lead (organic: half the baseline's validation error after epoch 1, lost by epoch 10; water: gains at equal labelled steps). (4) On water, 22,400 pretraining steps save 1,200 to 18,100 labelled steps (interpolating the baseline curve on log axes). For plain this is like multiplying the labelled steps by 1.2 to 1.3; break-even would need roughly 75,000 to 110,000 labelled steps, which is untested.
+- Feature speed does not predict the water result: the slowest encoder (no predictor) gains 27% and the one fast encoder (relative loss) 28% at equal labelled steps. So the reason given on the E23 card ("the task needs the fast part") is not supported as the main reason for no gain. E23 still describes what is learned.
+- Organic has three separate effects: no gain on seen molecules (a 1.3 times speed-up is worth about 3% where five times the steps gives 18%); 2 to 3 points extra loss on new molecules (features tied to the pretraining runs, or a general penalty for starting from trained weights, Ash and Adams 2020; not separated); three variants worse even on labelled frames (cause unknown).
+
+Corrections:
+- "The water gain was extra training steps, not pretraining" (18 Nov, and the E15 and E16 cards) is too strong. At equal labelled steps the gain is real and repeatable; it is faster training that costs more steps than it saves. At equal total steps the baseline is far ahead at 28,000 steps and level at 78,400.
+- The feature vector has 640 numbers per atom (512 + 128), not 512. Hypothesis 6 above, the results report document and its PDF are corrected.
+
+Proposed, not agreed: label every frame of 17 organic molecules and pretrain on all 168. It is the only test in which the unlabelled frames hold something the labels lack (more molecules), so it separates "the set-up leaves no room" from "the objective is wrong". A split by molecule was parked on 11 Nov.
 
