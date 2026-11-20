@@ -4,6 +4,8 @@ Status: proposed (20 Nov 2026). Card first; no code is written until it is agree
 
 **Why this exists:** with equal data and equal optimiser steps, pretraining gives no gain (E16, E15, E20). We already know two things about the pretrained encoders: their features change very little over one time step (0.4 to 2%, against 35 to 55% for an encoder trained with labels; E08), and a linear read-out cannot recover momentum from them (0.00, against about 0.8 for an untrained encoder; E18). A 2026 paper on the same kind of training on video (MotionJEPA, pointed out by Bruno) reports the same pattern and calls it a bias towards slow features. What we have not shown: (1) that pretraining removes the fast information, as opposed to never learning it; (2) what the slow features describe; (3) that the task needs the fast information, which would make slowness a reason for "no gain".
 
+**Update, 20 Nov (after the deep dive, https://claude.ai/artifact/9SqGJY3qrzteSPSwm5ySJ5):** three existing water results speak against slowness as the main reason for no gain. The no-predictor encoder, trained directly to keep features constant, gives the largest gain at equal labelled steps (27%). The one encoder with fast features (relative loss) gives the same gain (28%). A short plain pretraining gives the worst result. This experiment is kept for what it describes: what the features are. Why there is no gain is tested by E24. The check that momentum is absent, not only unreadable by a linear map, and the organic version of part 2, are in E25.
+
 **Hypothesis:** the pretraining loss (features now and later should match, while every feature dimension stays varied and uncorrelated across atoms) selects the slowest-changing quantities available. In liquid water the cheapest slow quantity is the orientation of each molecule in the box, which barely changes in 16 fs and differs between atoms. Momentum, which for a hydrogen reverses within about 10 fs, is discarded. The one-step task needs momentum and other fast quantities, so labelled training has to rebuild them.
 
 **Tested on:** liquid water, 16 fs. All measurements use the 28 test runs (the same liquid, simulation runs never seen in training or pretraining), read from the raw trajectories stored every 0.25 fs.
@@ -74,10 +76,10 @@ Model, frames and output layers are identical in every arm; only the set of repl
 1. Feature directions are found with a linear method. Information stored in a non-linear form is not seen (as for the probes).
 2. One encoder per row; no spread across pretraining seeds.
 3. The 2 ps runs limit timescales to about 1 ps.
-4. Parts 1 and 2 describe water only. Organic molecules have 50-frame runs of 8 fs steps (392 fs), enough for a shorter version later.
+4. Parts 1 and 2 describe water only. An organic run holds 25 start times 100 fs apart (2.4 ps), each with one 8 fs pair, so organic time lags are 8 fs and multiples of 100 fs. (An earlier version of this card said 50 frames 8 fs apart; that was wrong.) The organic version is part B of E25.
 
 ## What we do with the result
-- All three parts as predicted: we have a shown mechanism for "no gain": the loss keeps slow quantities (orientation), discards fast ones, and the task uses the fast ones. The next design must keep fast information (for example an added term that predicts the change in features, as MotionJEPA does, or a read-out of momentum during pretraining).
+- All three parts as predicted: we have shown what the loss keeps (slow quantities such as orientation), what it discards (fast ones), and that the model trained with labels uses the fast ones. By the update at the top, this describes the features; it is not by itself the reason for no gain. A next objective should still keep fast information (for example an added term that predicts the change in features, as MotionJEPA does, or a read-out of momentum during pretraining).
 - Part 3 fails (slow directions matter as much): look to the other hypotheses in notes/decisions.md (20 Nov).
 - Part 2 rotation control fails: the features are orientation-dependent for another reason; orientation is not the slow quantity.
 

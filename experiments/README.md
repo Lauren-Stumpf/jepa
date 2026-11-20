@@ -98,5 +98,8 @@ Also: before comparing against a baseline, check that more training no longer im
 | E21 | Water, all the labels: baseline with the same total steps as the E17 pretrained arms | running |
 | E22 | Rolling out the water baseline: error growth, error on its own outputs, drift, failure, feature drift | running |
 | E23 | Does pretraining learn slow features, what are they, and does the task need the fast part? | proposed |
+| E24 | Organic, labels on 17 molecules, pretraining on all 168: does pretraining help when the unlabelled frames hold more molecules than the labels? | proposed |
+| E25 | Three checks on existing models, no training: momentum by intervention, what is constant along an organic run, error by element | proposed |
+| E26 | Learning rate of both arms, and a random start with the pretrained weights' sizes: where do the water lead and the organic loss come from? | proposed |
 
 Note (16 Nov 2026): in E01, E04, E05, E06, E11 and E12 the pretrained arm was pretrained on all training frames and the baseline saw 10% of them, so those comparisons are confounded with extra data. See notes/decisions.md and experiments/INSTRUCTIONS_E13_E15.md.
