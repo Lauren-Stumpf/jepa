@@ -94,8 +94,9 @@ Also: before comparing against a baseline, check that more training no longer im
 | E17 | Water, all the labels: baseline against pretraining | done |
 | E18 | Linear probes: what the encoders hold, organic and water | done |
 | E19 | Direction in the features: rotation sensitivity and direction probes | done |
-| E20 | Organic, 10% of the labels: is the baseline still improving? (500 epochs) | proposed |
-| E21 | Water, all the labels: baseline with the same total steps as the E17 pretrained arms | proposed |
-| E22 | Rolling out the water baseline: error growth, error on its own outputs, drift, failure, feature drift | proposed |
+| E20 | Organic, 10% of the labels: is the baseline still improving? (500 epochs) | done (0.0186 against 0.0226; card result to fill in) |
+| E21 | Water, all the labels: baseline with the same total steps as the E17 pretrained arms | running |
+| E22 | Rolling out the water baseline: error growth, error on its own outputs, drift, failure, feature drift | running |
+| E23 | Does pretraining learn slow features, what are they, and does the task need the fast part? | proposed |
 
 Note (16 Nov 2026): in E01, E04, E05, E06, E11 and E12 the pretrained arm was pretrained on all training frames and the baseline saw 10% of them, so those comparisons are confounded with extra data. See notes/decisions.md and experiments/INSTRUCTIONS_E13_E15.md.
