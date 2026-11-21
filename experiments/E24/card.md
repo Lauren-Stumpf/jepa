@@ -4,6 +4,8 @@ Status: proposed (20 Nov 2026). Card first; no code is written until it is agree
 
 **Why this exists:** in every comparison so far the unlabelled frames held nothing the labelled frames lacked. The labelled 10% is every tenth frame, so it covers all 168 training molecules, and the label is the later frame, which pretraining also uses. The deep dive of 20 Nov (https://claude.ai/artifact/9SqGJY3qrzteSPSwm5ySJ5) gives this as the most likely main reason for "no gain" (its group 1). The rival reason is that the pretraining objective learns nothing that carries over to other molecules (its group 2). The two reasons only predict different results when the unlabelled frames do hold something more. Here they hold ten times more molecules than the labels.
 
+**Update, 21 Nov (independent review of the deep dive):** for frames, organic molecules already had room. An encoder trained with labels on all 84,000 frames gives 0.0148 against 0.0226 (E14), and pretraining saw those frames and ended 4% worse (E01). So existing results already favour "the objective" on organic molecules. This experiment is therefore not the only separating test. What it adds is room of a different kind, more molecules, and a comparison at equal total steps, which E01 did not have.
+
 **Question:** with labels on 17 molecules and pretraining on all 168, does the pretrained model predict new molecules better than a baseline given the same total number of optimiser steps?
 
 **Hypotheses (rivals):**
