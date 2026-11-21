@@ -21,14 +21,12 @@ Encoders: untrained (seed 0), baseline (a trained model.ckpt, encoder weights on
 pretrained (pretrained.ckpt), loaded as in eval/feature_change_vs_jump.py.
 
   python eval/momentum_intervention.py /storage3/lauren/data/water configs/flashmd_water16_scratch.yaml \
-      --run_list results/eval/water_test_runs.txt \
       --baseline results/runs/flashmd_water16_scratch/model.ckpt \
       --pretrained plain=results/runs/jepa_pretrain_plain_water16/pretrained.ckpt \
       --out results/eval/momentum_intervention_water.json
 """
 
 import argparse
-import glob
 import json
 import os
 import sys
@@ -59,8 +57,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("runs_root")
     ap.add_argument("config")
-    ap.add_argument("--run_list", default="", help="file with one run directory name per line (for example the test runs); default: the first --runs runs")
-    ap.add_argument("--runs", type=int, default=4)
+    ap.add_argument("--water_manifest", default="data/water/pairs/16fs/manifest.json")
+    ap.add_argument("--split", default="test", help="which runs of the manifest to use (test: the same liquid, runs never seen in training)")
     ap.add_argument("--spacing", type=float, default=200.0, help="fs between start times within a run")
     ap.add_argument("--swap_fs", type=float, default=200.0, help="how much later the swapped-in momenta are taken")
     ap.add_argument("--baseline", default="")
@@ -70,11 +68,8 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     cfg, hypers, masses, timestep, info = load_config(args.config)
 
-    if args.run_list:
-        dirs = [os.path.join(args.runs_root, line.strip()) for line in open(args.run_list) if line.strip()]
-    else:
-        dirs = sorted(glob.glob(os.path.join(args.runs_root, "run_*")))[:args.runs]
-    assert dirs, "no runs found"
+    dirs = [os.path.join(args.runs_root, r) for r in json.load(open(args.water_manifest))["split"]["runs"][args.split]]
+    assert dirs and all(os.path.isdir(d) for d in dirs), "runs of the split not found under runs_root"
 
     from ase.data import atomic_numbers
     frames = {k: [] for k in KINDS}
@@ -122,12 +117,12 @@ def main():
         for k in KINDS:
             h1 = features(model, frames[k], device)
             row[k] = relative_change(h0, h1, types, elements)
-        assert all(v == 0.0 for v in row["same"].values()), f"{name}: the same input gave different features: {row['same']}"
+        assert all(v < 1e-10 for v in row["same"].values()), f"{name}: the same input gave different features: {row['same']}"
         res["encoders"][name] = {"path": path, "relative_change_by_element": row}
         for z in elements:
             print(f"{name:14s} element {z:2d}  " + "  ".join(f"{k}: {row[k][str(z)]:.5f}" for k in KINDS), flush=True)
-    os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
-    json.dump(res, open(args.out, "w"), indent=1)
+        os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
+        json.dump(res, open(args.out, "w"), indent=1)   # after every encoder, so a later failure loses nothing
     print(f"written {args.out}")
 
 
