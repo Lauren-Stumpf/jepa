@@ -1,0 +1,13 @@
+# name|kind|min GPU memory (MB)|runs per GPU|spec   (scripts/launch_runs.sh)
+e26_baseline_organic8_10pct_lr1e-4_s0|train|20000|1|configs/e26_baseline_organic8_10pct_lr1e-4_s0.yaml
+e26_baseline_organic8_10pct_lr1e-4_s1|train|20000|1|configs/e26_baseline_organic8_10pct_lr1e-4_s1.yaml
+e26_baseline_organic8_10pct_lr1e-4_s2|train|20000|1|configs/e26_baseline_organic8_10pct_lr1e-4_s2.yaml
+e26_baseline_organic8_10pct_lr1e-3_s0|train|20000|1|configs/e26_baseline_organic8_10pct_lr1e-3_s0.yaml
+e26_baseline_organic8_10pct_lr1e-3_s1|train|20000|1|configs/e26_baseline_organic8_10pct_lr1e-3_s1.yaml
+e26_baseline_organic8_10pct_lr1e-3_s2|train|20000|1|configs/e26_baseline_organic8_10pct_lr1e-3_s2.yaml
+e26_plain_organic8_10pct_lr1e-4_s0|train|20000|1|configs/e26_plain_organic8_10pct_lr1e-4_s0.yaml
+e26_plain_organic8_10pct_lr1e-4_s1|train|20000|1|configs/e26_plain_organic8_10pct_lr1e-4_s1.yaml
+e26_plain_organic8_10pct_lr1e-4_s2|train|20000|1|configs/e26_plain_organic8_10pct_lr1e-4_s2.yaml
+e26_plain_organic8_10pct_lr1e-3_s0|train|20000|1|configs/e26_plain_organic8_10pct_lr1e-3_s0.yaml
+e26_plain_organic8_10pct_lr1e-3_s1|train|20000|1|configs/e26_plain_organic8_10pct_lr1e-3_s1.yaml
+e26_plain_organic8_10pct_lr1e-3_s2|train|20000|1|configs/e26_plain_organic8_10pct_lr1e-3_s2.yaml

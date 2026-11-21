@@ -30,10 +30,12 @@ runs() {
     for e in 500 1400; do echo e16_baseline_water16_10pct_${e}ep_s$s; done
     for a in baseline finetune_plain finetune_nopred; do echo e17_${a}_water16_all_s$s; done
     echo e21_baseline_water16_all_140ep_s$s
+    echo e27_baseline_2400ep_water16_10pct_s$s
+    echo e27_plain_2000ep_water16_10pct_s$s
   done
 }
 
-for pass in $(seq 1 432); do
+for pass in $(seq 1 1008); do
   waiting=0; failed=0
   for r in $(runs); do
     o=$T/$r.csv
@@ -56,7 +58,7 @@ for pass in $(seq 1 432); do
     echo "$(date '+%F %T') finished: $failed runs failed $MAX_TRIES times (see the .log and .tries files), the rest tested"
     exit $(( failed > 0 ))
   fi
-  [ "$pass" -lt 432 ] && sleep 600
+  [ "$pass" -lt 1008 ] && sleep 600
 done
 echo "$(date '+%F %T') stopped after 72 h: $waiting runs not tested yet, $failed failed"
 exit 1

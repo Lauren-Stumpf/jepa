@@ -24,6 +24,7 @@ runs() {
     echo e14_finetune_supervised_organic8_10pct_s$s
     for p in plain nopred; do for e in 20 200; do echo e15_finetune_${p}_same10_ep${e}_organic8_10pct_s$s; done; done
     echo e20_baseline_organic8_10pct_500ep_s$s
+    for a in baseline plain; do for l in lr1e-4 lr1e-3; do echo e26_${a}_organic8_10pct_${l}_s$s; done; done
   done
 }
 

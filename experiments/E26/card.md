@@ -1,10 +1,12 @@
 # E26: do the water lead and the organic loss come from what the encoder learned, or from the learning rate and the sizes of the starting weights?
 
-Status: proposed (20 Nov 2026). Card first; no code is written until it is agreed, and nothing runs until Lauren gives the go-ahead in writing.
+Status: organic part agreed 21 Nov 2026 (see the update below); the rest proposed.
 
 **Why this exists:** every run so far, baseline or pretrained, used one learning rate (0.0003, the value in the FlashMD paper) and one schedule. Two readings in the deep dive of 20 Nov (https://claude.ai/artifact/9SqGJY3qrzteSPSwm5ySJ5) depend on that never-tested choice.
 - On water, pretrained models are 12 to 28% ahead of the baseline at equal labelled steps. The deep dive reads this as faster early training caused by the pretrained encoder. It could instead be a baseline trained at a poor learning rate, or an effect of the sizes of the pretrained weights, layer by layer, and not of what they compute (hypothesis 7 in notes/decisions.md, 20 Nov).
 - On organic molecules, pretrained models end 4 to 19% worse. Labelled training that starts from a pretrained encoder is normally run at a lower learning rate than training from random weights; ours was not (explanation 4a).
+
+**Update, 21 Nov:** after the independent review of the designs, only the organic part is launched, with three learning rates (0.0001 and 0.001 new, 0.0003 existing) for the baseline and for plain: experiments/E26/runs.txt, 12 runs of about 5.3 hours on 24 GB cards. The water sweep is dropped (no outcome would change a decision). The weight-size arm waits for an untrained start passed through the same route. Launched 21 Nov on Lauren's instruction ("finish e21 e22 and then 1,2,3,5", "write review and run").
 
 **Question:** when the baseline and the pretrained arm each get their own best learning rate, does the water lead remain and does the organic loss remain? And does a random start that keeps the pretrained weights' sizes reproduce the water lead?
 
