@@ -15,6 +15,18 @@ atoms closer than 0.7 A (nearest periodic copy), or an instantaneous temperature
 
 --momentum_scale f multiplies every momentum by f after each step (must-fail controls only).
 
+Two corrections from the FlashMD paper (arXiv 2505.19350, appendices C and D), both off by default:
+--conserve_energy   after each model step every momentum of a run is multiplied by
+                    alpha = sqrt(1 - (E' - E) / K'), where E is the total energy before the step,
+                    E' after it and K' the kinetic energy after it, so the total energy is unchanged.
+                    The potential energy is the exact q-TIP4P/f energy (eval/qtip4pf_ase.py).
+                    If 1 - (E' - E) / K' is not positive the step is left uncorrected and counted.
+--langevin_fs tau   a Langevin thermostat with time constant tau (fs) at --target_T: half a
+                    thermostat step before and after each model step,
+                    p <- c p + sqrt(m k_B T (1 - c^2)) xi,  c = exp(-(stride / 2) / tau),
+                    with xi standard normal. With both corrections on, the energy that is conserved
+                    is the one measured after the first half thermostat step.
+
 Saved (npz): states at every step up to 126, at every step that is a multiple of --save_every,
 and at k+1 for every k that is a multiple of 50 (for part A2); temperature at every step; the
 step and reason each rollout stopped; and, for part A2, the model's one-step prediction from the
@@ -40,7 +52,7 @@ import torch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from eval.eval_onestep import _metatrain_one_step, load_flashmd  # noqa: E402
-from eval.qtip4pf_ase import config_masses, read_run  # noqa: E402
+from eval.qtip4pf_ase import QTIP4PF, config_masses, potential_energy, read_run  # noqa: E402
 
 STRIDE_FS = 16.0
 RAW_PER_STEP = 64           # 16 fs / 0.25 fs
@@ -93,6 +105,18 @@ def temperature(p, masses):
     return 2.0 * ke / (3.0 * p.shape[1] * ase.units.kB)
 
 
+def kinetic(p, masses):
+    """Kinetic energy per system (eV). p: (B, N, 3)."""
+    return 0.5 * ((p ** 2).sum(-1) / masses[None, :]).sum(-1)
+
+
+def thermostat_half(p, masses, tau_fs, target_T, rng):
+    """Half a Langevin (Ornstein-Uhlenbeck) step on the momenta, exact for any stride."""
+    c = np.exp(-(STRIDE_FS / 2.0) / tau_fs)
+    sigma = np.sqrt(masses * ase.units.kB * target_T * (1.0 - c * c))[None, :, None]
+    return c * p + sigma * rng.standard_normal(p.shape)
+
+
 def unphysical(q, p, numbers, cell, masses, device):
     """Reason string per system ('' if physical). Molecules are O H H in file order."""
     x = torch.tensor(q, device=device)
@@ -110,6 +134,8 @@ def unphysical(q, p, numbers, cell, masses, device):
     reasons = []
     for b in range(q.shape[0]):
         why = []
+        if not np.isfinite(q[b]).all() or not np.isfinite(p[b]).all():
+            why.append("not finite")
         if max_oh[b] > MAX_OH:
             why.append(f"O-H bond {max_oh[b]:.2f} A")
         if min_r[b] < MIN_DIST:
@@ -189,6 +215,10 @@ def main():
     ap.add_argument("--n_steps", type=int, default=6250, help="16 fs steps (6,250 = 100 ps)")
     ap.add_argument("--save_every", type=int, default=10)
     ap.add_argument("--momentum_scale", type=float, default=1.0)
+    ap.add_argument("--conserve_energy", action="store_true", help="rescale momenta after each step so the total energy is unchanged")
+    ap.add_argument("--langevin_fs", type=float, default=0.0, help="Langevin thermostat time constant in fs; 0 = no thermostat")
+    ap.add_argument("--target_T", type=float, default=300.0)
+    ap.add_argument("--seed", type=int, default=0, help="random numbers of the thermostat")
     ap.add_argument("--out", default="")
     ap.add_argument("--check_onestep", default="", help="test pairs file: run the one-step check only")
     ap.add_argument("--check_wrap", type=int, default=0, help="run the wrap check on this many frames only")
@@ -202,6 +232,7 @@ def main():
     if args.check_wrap:
         sys.exit(0 if check_wrap(model, runs, masses_z, device, args.check_wrap) else 1)
     assert args.out, "--out is required for a rollout"
+    assert args.momentum_scale == 1.0 or not args.conserve_energy, "--momentum_scale is cancelled by --conserve_energy"
 
     starts, refs = [], []
     for d in runs:
@@ -236,26 +267,66 @@ def main():
     q = np.stack([s["q"][0] for s in starts]); p = np.stack([s["p"][0] for s in starts])
     alive = np.ones(B, bool)
     pos = {k: i for i, k in enumerate(save)}
-    t0 = time.time()
-    for k in range(args.n_steps + 1):
-        T[k, alive] = temperature(p[alive], masses)
-        if k in save_set:
-            saved_q[pos[k], alive] = q[alive]; saved_p[pos[k], alive] = p[alive]
-        if k == args.n_steps or not alive.any():
-            break
-        idx = np.where(alive)[0]
-        qn, pn = batched_step(model, numbers, q[idx], p[idx], cell, masses, device)
-        pn = pn * args.momentum_scale
-        q[idx], p[idx] = qn, pn
-        why = unphysical(qn, pn, numbers, cell, masses, device)
-        for j, b in enumerate(idx):
-            if why[j]:
-                alive[b] = False; stopped_at[b] = k + 1; reason[b] = why[j]
-                print(f"run {os.path.basename(runs[b])} stopped at step {k + 1} ({(k + 1) * STRIDE_FS / 1000:.2f} ps): {why[j]}", flush=True)
-        if (k + 1) % 500 == 0:
-            print(f"step {k + 1}/{args.n_steps}, {alive.sum()} of {B} rollouts running, mean T {np.nanmean(T[k]):.1f} K, "
-                  f"{time.time() - t0:.0f} s", flush=True)
-
+    rng = np.random.default_rng(args.seed)
+    calc = QTIP4PF() if args.conserve_energy else None
+    def pot(qq):   # exact potential energy per run; NaN if the force field rejects the geometry
+        out = []
+        for x in qq:
+            try:
+                out.append(potential_energy(calc, numbers, x, cell, masses) if np.isfinite(x).all() else np.nan)
+            except RuntimeError:
+                if calc.proc.poll() is not None:   # the driver has exited: stop, do not go on uncorrected
+                    raise
+                out.append(np.nan)
+        return np.array(out)
+    V = np.full(B, np.nan)
+    E_total = np.full((args.n_steps + 1, B), np.nan)     # total energy (eV) at each step, when --conserve_energy
+    alpha_log = np.full((args.n_steps, B), np.nan)
+    not_rescaled = 0
+    try:
+        if calc is not None:
+            V[:] = pot(q)
+        t0 = time.time()
+        for k in range(args.n_steps + 1):
+            T[k, alive] = temperature(p[alive], masses)
+            if calc is not None:
+                E_total[k, alive] = kinetic(p[alive], masses) + V[alive]
+            if k in save_set:
+                saved_q[pos[k], alive] = q[alive]; saved_p[pos[k], alive] = p[alive]
+            if k == args.n_steps or not alive.any():
+                break
+            idx = np.where(alive)[0]
+            p_in = thermostat_half(p[idx], masses, args.langevin_fs, args.target_T, rng) if args.langevin_fs > 0 else p[idx]
+            qn, pn = batched_step(model, numbers, q[idx], p_in, cell, masses, device)
+            pn = pn * args.momentum_scale
+            if calc is not None:
+                e_before = kinetic(p_in, masses) + V[idx]
+                v_new = pot(qn)
+                k_new = kinetic(pn, masses)
+                arg = 1.0 - (k_new + v_new - e_before) / k_new
+                ok = arg > 0
+                not_rescaled += int((~ok).sum())
+                alpha = np.where(ok, np.sqrt(np.where(ok, arg, 1.0)), 1.0)
+                pn = pn * alpha[:, None, None]
+                alpha_log[k, idx] = alpha
+                V[idx] = v_new
+            if args.langevin_fs > 0:
+                pn = thermostat_half(pn, masses, args.langevin_fs, args.target_T, rng)
+            q[idx], p[idx] = qn, pn
+            why = unphysical(qn, pn, numbers, cell, masses, device)
+            for j, b in enumerate(idx):
+                if why[j]:
+                    alive[b] = False; stopped_at[b] = k + 1; reason[b] = why[j]
+                    print(f"run {os.path.basename(runs[b])} stopped at step {k + 1} ({(k + 1) * STRIDE_FS / 1000:.2f} ps): {why[j]}", flush=True)
+            if (k + 1) % 500 == 0:
+                print(f"step {k + 1}/{args.n_steps}, {alive.sum()} of {B} rollouts running, mean T {np.nanmean(T[k]):.1f} K, "
+                      f"{time.time() - t0:.0f} s", flush=True)
+    finally:
+        if calc is not None:
+            calc.close()
+    if args.conserve_energy:
+        print(f"energy correction: {not_rescaled} steps could not be rescaled; mean |alpha - 1| "
+              f"{np.nanmean(np.abs(alpha_log - 1)):.2e}")
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     np.savez_compressed(
         args.out, saved_steps=np.array(save), q=saved_q, p=saved_p, temperature=T, stopped_at=stopped_at,
@@ -264,7 +335,8 @@ def main():
         ref_p=np.stack([rp[:n_ref] for _, rp in refs]),
         a2_steps=np.array(a2_steps), a2_true_q=np.stack(a2_true_q),
         a2_true_p=np.stack(a2_true_p), model=args.model, config=args.config,
-        momentum_scale=args.momentum_scale, stride_fs=STRIDE_FS)
+        momentum_scale=args.momentum_scale, stride_fs=STRIDE_FS, conserve_energy=args.conserve_energy,
+        langevin_fs=args.langevin_fs, target_T=args.target_T, total_energy=E_total, alpha=alpha_log)
     print(f"written {args.out}: {alive.sum()} of {B} rollouts reached step {args.n_steps}")
 
 
