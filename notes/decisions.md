@@ -636,3 +636,24 @@ Corrections:
 
 Proposed, not agreed: label every frame of 17 organic molecules and pretrain on all 168. It is the only test in which the unlabelled frames hold something the labels lack (more molecules), so it separates "the set-up leaves no room" from "the objective is wrong". A split by molecule was parked on 11 Nov.
 
+
+## 21 to 26 Nov 2026: results read, two tracks, E27 third arm
+
+Results (cards E20, E21, E22, E26, E27, E28 hold the numbers):
+- E21: with every water frame labelled and equal total steps, baseline and pretrained are level (0.0060 against 0.0061). The 12% gain of E17 was extra steps.
+- E22: the water baseline rolled out with no correction cools by 164 K in 100 ps. Its one-step error on its own outputs is not larger than on true states, so "the model is fed inputs unlike its training data" is not what goes wrong. Its error doubles every 48 fs against 272 fs for exact dynamics.
+- E28: with the FlashMD paper's energy correction the temperature holds for 100 ps; with a thermostat both elements are at 300 K. With the energy correction alone hydrogens are 12 K hotter than oxygens, but the exact starting frames already show 7 K (standard error 2.9), so this is not yet a model fault.
+- E26 (organic): both arms improve with a higher learning rate and are best at the highest rate tried (0.001), where their seeds overlap. The organic baseline used so far was held back by its learning rate (0.0207 against 0.0226).
+- E27: at 134,400 total steps the pretrained model beats the baseline on every seed (0.0046 against 0.0065). The baseline memorises its 896 frames. The pretrained arm saw 8,960 frames, the baseline 896, so the extra frames could be the whole effect. Third arm (pretraining on the 896 labelled frames only) launched 26 Nov on torrnode15.
+- Momentum by intervention (E25 part A, water): the response of the features to swapped momenta is 0.002 to 0.02% for plain and no predictor. The control failed: an untrained encoder also barely responds although a linear read-out recovers momentum from it. The measure shows how large a part of the features momentum is, not whether it is present.
+- Neighbours in water (cutoff 4.5 A): 5.3% of neighbour pairs change after one 16 fs step, 27% after 64 steps.
+
+Decisions (Lauren):
+- Latent rollout and pretraining are developed separately. Track A: does stepping in feature space accumulate less error than stepping in real space (no pretraining)? Track B: what is a useful pretraining objective?
+- First priority is an evaluation set-up that shows when we make progress.
+- Linear read-outs and the "change in features" measure are no longer main evidence. Three functional tests replace them: is the frozen encoder sufficient for the task with adequate output layers; is it easy to step; does it stay accurate when stepped repeatedly.
+- Latent rollout design (card E29, proposed): small molecules whose neighbour list never changes; one model with three parts (encoder, step network with message passing, output layers) rolled out in two ways (encode, step, decode, repeat against encode, step, step, step, decode); when trained for several steps the loss is computed at the end. Renaming FlashMD's third message-passing layer as "the step" was rejected. Moving neighbours are a problem to solve later, not a limit.
+
+Mistake recorded: E27 was launched without the arm pretrained on the labelled frames only, on the strength of E13 (100-epoch runs). An assumption taken from short runs was carried over to long runs without a test.
+
+Literature, 26 Nov (searches, not a full review): learned large-step integrators for molecular dynamics that work in real space are now many: FlashMD (arXiv 2505.19350), learning the action (2508.01068), Hamiltonian flow maps (2601.22123), Langevin flow maps (2610.05998), Kolmogorov-Chapman maps (2611.12880). The last three train without trajectories. None steps in feature space, and none takes a control (temperature, field, bias force) as an input or is used to plan a control schedule; thermostats are applied outside the model.
