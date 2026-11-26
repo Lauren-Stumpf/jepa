@@ -65,6 +65,8 @@ def main():
     ap.add_argument("--workers", type=int, default=28)
     ap.add_argument("--n_steps", type=int, default=0, help="16 fs steps; 0 = as many as the rollout file")
     args = ap.parse_args()
+    import shutil
+    assert shutil.which("i-pi-driver"), "i-pi-driver is not on PATH (source env_train.sh first)"
     r = dict(np.load(args.like, allow_pickle=True))
     numbers, cell, masses = r["numbers"], r["cell"], r["masses"]
     ref_q, ref_p = r["ref_q"], r["ref_p"]                     # (runs, 126, atoms, 3): the stored true frames, every 16 fs

@@ -10,17 +10,21 @@ eval/exact_reference_water.py (the exact answer), which share one layout, and re
              (K_after: kinetic energy after the correction; only when there is no thermostat,
              because with one the saved temperature is taken after the second thermostat half step).
   elements   temperature of hydrogens and of oxygens, and hydrogen minus oxygen, in three windows
-             (0 to 2 ps, 2 to 50 ps, 50 to 100 ps): mean over runs and standard error over runs.
+             (0 to 2 ps, 2 to 50 ps, 50 to 100 ps): mean over runs; the standard error over runs
+             is given for hydrogen minus oxygen only.
   shape      O-H bond length and H-O-H angle of the molecules, mean and spread, 50 to 100 ps.
   structure  how often two atoms of different molecules are found at each distance (the radial
              distribution function), for O-O, O-H and H-H, 50 to 100 ps, distances up to half the
              box. Normalised so that 1 means "as often as if the atoms were placed at random".
              Score: mean absolute difference from the exact curve over distances from 1.5 A to half
              the box. Noise level of that score: the same difference between two halves of the
-             exact runs (14 runs against 14, so somewhat above the noise of 28 against 28).
+             exact runs (14 runs against 14), divided by the square root of 2 to match a
+             comparison of 28 runs against 28. One split only.
   movement   mean square displacement of the oxygens (after removing the motion of the whole box)
              at lags of about 1, 2, 5, 10 and 20 ps, over the whole run, and the diffusion
-             coefficient from the slope between the 5 and 20 ps lags, per run.
+             coefficient from the slope between the 5 and 20 ps lags, per run. Whole run, not
+             50 to 100 ps. A thermostat lowers diffusion by itself, so a low value in a
+             thermostat arm is not evidence of a model error.
 
 Tested on: whatever the files hold. For E28 that is the 28 water test runs (the same liquid as
 training, runs never seen in training).
@@ -70,7 +74,7 @@ def element_temperatures(r):
         n = int(np.isfinite(d).sum())
         out[name] = {"hydrogen_K": float(np.nanmean(th)), "oxygen_K": float(np.nanmean(to)),
                      "hydrogen_minus_oxygen_K": float(np.nanmean(d)),
-                     "standard_error_K": float(np.nanstd(d, ddof=1) / np.sqrt(n)), "runs": n}
+                     "hydrogen_minus_oxygen_standard_error_K": float(np.nanstd(d, ddof=1) / np.sqrt(n)), "runs": n}
     return out
 
 
@@ -212,11 +216,13 @@ def main():
     S["exact"], centres, g_ex = score(ex)
     B = ex["q"].shape[1]
     _, ga = rdf(ex, range(0, B // 2)); _, gb = rdf(ex, range(B // 2, B))
-    S["structure_noise_level"] = structure_score(ga, gb, centres)
+    # 14 runs against 14 is noisier than 28 against 28 by the square root of 2: divide so the level matches the scores
+    S["structure_noise_level"] = {k: v / np.sqrt(2.0) for k, v in structure_score(ga, gb, centres).items()}
     for spec in args.rollouts:
         name, path = spec.split("=", 1)
         r = load(path)
-        assert (r["runs"] == ex["runs"]).all() and np.allclose(r["ref_q"][:, 0], ex["ref_q"][:, 0]), f"{name}: not the same starts"
+        assert (r["runs"] == ex["runs"]).all() and np.array_equal(r["ref_q"][:, 0], ex["ref_q"][:, 0]) \
+            and np.array_equal(r["ref_p"][:, 0], ex["ref_p"][:, 0]), f"{name}: not the same starts"
         S["rollouts"][name], _, _ = score(r, centres, g_ex)
         S["rollouts"][name]["path"] = path
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
@@ -228,13 +234,13 @@ def main():
         diff = st.get("mean_absolute_difference_from_exact", {})
         mv = s["movement"]
         print(f"{name:34s} H {el.get('hydrogen_K', float('nan')):6.1f} K  O {el.get('oxygen_K', float('nan')):6.1f} K  "
-              f"H-O {el.get('hydrogen_minus_oxygen_K', float('nan')):+6.1f} +- {el.get('standard_error_K', float('nan')):.1f}  "
+              f"H-O {el.get('hydrogen_minus_oxygen_K', float('nan')):+6.1f} +- {el.get('hydrogen_minus_oxygen_standard_error_K', float('nan')):.1f}  "
               f"bond {s['shape']['bond_mean_A']:.4f} +- {s['shape']['bond_spread_A']:.4f} A  angle {s['shape']['angle_mean_deg']:.2f} +- {s['shape']['angle_spread_deg']:.2f}  "
               f"O-O peak {st['first_O-O_peak']['height']:.2f} at {st['first_O-O_peak']['position_A']:.2f} A  "
               f"structure difference {', '.join(f'{k} {v:.4f}' for k, v in diff.items()) or '(reference)'}  "
               f"diffusion {mv.get('diffusion_A2_per_ps', float('nan')):.4f} +- {mv.get('diffusion_standard_error', float('nan')):.4f} A^2/ps")
     line("exact", S["exact"])
-    print(f"{'noise level of structure difference':34s} {', '.join(f'{k} {v:.4f}' for k, v in S['structure_noise_level'].items())}")
+    print(f"{'noise level of structure difference (two halves of the exact runs, divided by root 2)':34s} {', '.join(f'{k} {v:.4f}' for k, v in S['structure_noise_level'].items())}")
     for name, s in S["rollouts"].items():
         line(name, s)
         if s["energy"]:
