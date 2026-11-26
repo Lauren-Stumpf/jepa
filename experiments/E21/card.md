@@ -1,6 +1,6 @@
 # E21: water with all the labels: does the pretraining gain survive equal steps?
 
-Status: proposed (18 Nov 2026). Lauren approved the close-out runs in principle; nothing is launched until she gives the go-ahead in writing.
+Status: done (launched 18 Nov, read 23 Nov 2026).
 
 **Why this exists:** in E17 (water, all 8,960 frames labelled) both pretrained arms beat the baseline by 12% (0.0061 against 0.0069), but they had 78,400 optimiser steps in total (22,400 pretraining + 56,000 labelled) against the baseline's 56,000. E16 showed that on water with 10% of the labels the whole gain was this difference in steps.
 
@@ -34,10 +34,19 @@ What differs between compared arms: how the 78,400 steps are spent (all on label
 **Runs:** experiments/E21/runs.txt. 3 runs of about 10 hours, 46 GB cards (as E17). Test evaluation: scripts/eval_test_water16_queue.sh (must be started again; it has finished).
 
 ## Result
-(to be filled in)
+Test momentum error, read 23 Nov. Tested on water test frames (the same liquid as training, runs never seen), all 8,960 frames labelled, 3 seeds each.
+
+| Arm | Total optimiser steps | Seeds | Mean |
+|---|---|---|---|
+| Baseline, 140 epochs | 78,400 | 0.0061, 0.0061, 0.0057 | 0.0060 |
+| Plain pretrained, then 100 epochs (E17) | 22,400 + 56,000 = 78,400 | 0.0061, 0.0061, 0.0062 | 0.0061 |
+| No predictor, then 100 epochs (E17) | 22,400 + 56,000 = 78,400 | 0.0061, 0.0060, 0.0061 | 0.0061 |
+
+The seeds overlap: the arms are level. The prediction (baseline not worse, 75%) held. With equal total steps the 12% gain of E17 is gone; it came from the pretrained arms' extra 22,400 steps.
 
 ## Assumptions check
-(to be filled in)
+- One pretraining seed per pretrained arm, as before.
+- Error by element (seed 0 of the baseline): hydrogen 0.0067, oxygen 0.0044.
 
 ## Next
-(to be filled in)
+Closed. With every frame labelled and equal total steps, pretraining neither helps nor hurts at this length. E27 asks the same at longer runs with 10% of the labels.

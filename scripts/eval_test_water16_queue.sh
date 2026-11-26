@@ -32,6 +32,7 @@ runs() {
     echo e21_baseline_water16_all_140ep_s$s
     echo e27_baseline_2400ep_water16_10pct_s$s
     echo e27_plain_2000ep_water16_10pct_s$s
+    echo e27_plain_same10_2000ep_water16_10pct_s$s
   done
 }
 

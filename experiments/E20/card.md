@@ -1,6 +1,6 @@
 # E20: organic, 10% of the labels: is the baseline still improving?
 
-Status: proposed (18 Nov 2026). Lauren approved the close-out runs in principle; nothing is launched until she gives the go-ahead in writing.
+Status: done (launched 18 Nov, read 19 Nov 2026).
 
 **Why this exists:** E16 showed that on water with 10% of the labels, the pretraining gain was the baseline having fewer optimiser steps. On organic molecules pretraining never helped, and this needs no new run to settle: the 100-epoch baseline (52,500 steps) already beats E15's long-pretraining arms (78,900 steps) by the seed rule, with fewer steps (every baseline seed 0.0223 to 0.0231, every pretrained seed 0.0241 to 0.0253).
 
@@ -36,10 +36,18 @@ What differs between compared arms: only the number of steps, and so the length 
 **Runs:** experiments/E20/runs.txt. 3 runs of about 27 hours, 24 GB cards (the organic 10% baseline took about 5.3 hours per 100 epochs). Test evaluation: scripts/eval_test_organic_queue.sh (must be started again; it has finished).
 
 ## Result
-(to be filled in)
+Test momentum error, read 19 Nov. Tested on organic test frames (21 molecules never seen in training), 3 seeds each.
+
+| Arm | Total optimiser steps | Seeds | Mean | Saved epoch |
+|---|---|---|---|---|
+| Baseline, 100 epochs (E01) | 52,500 | 0.0223, 0.0224, 0.0231 | 0.0226 | |
+| Baseline, 500 epochs | 262,500 | 0.0178, 0.0196, 0.0183 | 0.0186 | 482, 448, 492 |
+
+Every 500-epoch seed beats every 100-epoch seed: 18% better. The prediction ("changes by less than 10%", 55%) failed. The organic baseline was not finished at 100 epochs, so "extra steps had nothing to add on organic" was wrong.
 
 ## Assumptions check
-(to be filled in)
+- The best epoch is near the end in all three seeds, so the baseline may still be improving at 500 epochs.
+- The spread between seeds is wider at 500 epochs (0.0178 to 0.0196) than at 100 (0.0223 to 0.0231).
 
 ## Next
-(to be filled in)
+E26 then found that a learning rate of 0.001 reaches 0.0207 in 100 epochs, so the 100-epoch baseline was also held back by its learning rate. Organic comparisons need a baseline that is trained longer or at the higher rate.

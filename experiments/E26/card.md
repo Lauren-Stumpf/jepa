@@ -1,6 +1,6 @@
 # E26: do the water lead and the organic loss come from what the encoder learned, or from the learning rate and the sizes of the starting weights?
 
-Status: organic part agreed 21 Nov 2026 (see the update below); the rest proposed.
+Status: organic part done (launched 21 Nov, read 23 Nov 2026); water part dropped; weight-size arm not run.
 
 **Why this exists:** every run so far, baseline or pretrained, used one learning rate (0.0003, the value in the FlashMD paper) and one schedule. Two readings in the deep dive of 20 Nov (https://claude.ai/artifact/9SqGJY3qrzteSPSwm5ySJ5) depend on that never-tested choice.
 - On water, pretrained models are 12 to 28% ahead of the baseline at equal labelled steps. The deep dive reads this as faster early training caused by the pretrained encoder. It could instead be a baseline trained at a poor learning rate, or an effect of the sizes of the pretrained weights, layer by layer, and not of what they compute (hypothesis 7 in notes/decisions.md, 20 Nov).
@@ -76,10 +76,24 @@ What does each compared arm get that the other does not? Within a row, only the 
 **Code needed after the card is agreed** (reviewed by an independent agent before anything runs): configs and run lists with the learning rate changed; a script that writes the random start with the pretrained sizes (from train/make_random_checkpoint.py) and prints the checks listed under Controls.
 
 ## Result
-(to be filled in)
+Organic part only (the update at the top). Test momentum error, read 23 Nov. Tested on organic test frames (21 molecules never seen in training), 10% of the labels, 100 epochs, 3 seeds each.
+
+| Learning rate | Baseline | Plain pretrained |
+|---|---|---|
+| 0.0001 | 0.0286, 0.0285, 0.0291 (mean 0.0287) | 0.0313, 0.0309, 0.0306 (mean 0.0309) |
+| 0.0003 (E01) | 0.0223, 0.0224, 0.0231 (mean 0.0226) | mean 0.0234 |
+| 0.001 | 0.0204, 0.0212, 0.0204 (mean 0.0207) | 0.0210, 0.0208, 0.0218 (mean 0.0212) |
+
+- Both arms improve with every increase of the learning rate, and both are best at the highest rate tried.
+- At 0.001 the seeds overlap (baseline 0.0204 to 0.0212, plain 0.0208 to 0.0218): no difference by the seed rule. The 4% loss at 0.0003, which was clear on every seed, has become 2% and unclear.
+- Prediction 4 (at 0.0001 plain still does not beat the baseline, 85%) held: the lower rate made both arms worse.
+- The baseline used in every organic comparison so far was held back by its learning rate: 0.0207 against 0.0226, 8%.
+- Error by element at 0.001 (seed 0; hydrogen, carbon, nitrogen): baseline 0.0192, 0.0201, 0.0265; plain 0.0197, 0.0206, 0.0275.
 
 ## Assumptions check
-(to be filled in)
+- The range rule applies: the best rate is at the top of the range for both arms, so a higher rate (0.003) should be tried before the arms are compared for good.
+- The best rate was read from the test errors here; the validation errors have not been read yet.
+- The water part and the weight-size arm were not run.
 
 ## Next
-(to be filled in)
+Explanation 4a of the deep dive (the organic loss is partly the training recipe) is supported in part: a better learning rate halves the gap and makes it unclear, without turning it into a gain. Add 0.003 for both arms if organic comparisons continue.

@@ -47,7 +47,7 @@ EXPERIMENTS = {
     "E20": "Organic, 10% of the labels: is the baseline still improving? Trained for 500 epochs instead of 100",
     "E21": "Water, all the labels: baseline trained for 140 epochs, the same total steps as the E17 pretrained arms",
     "E26": "Organic, 10% of the labels: baseline and plain pretrained at learning rates 1e-4 and 1e-3 (3e-4 runs exist)",
-    "E27": "Water, 10% of the labels, long runs at equal total steps: baseline 2,400 epochs against plain pretrained + 2,000 epochs",
+    "E27": "Water, 10% of the labels, long runs at equal total steps: baseline 2,400 epochs against plain pretrained + 2,000 epochs (pretrained on all 8,960 frames, and on the 896 labelled frames only)",
 }
 
 VARIANTS = ("plain", "normtarget", "resid", "proj", "residrel")
@@ -131,7 +131,7 @@ def classify(name):
     m = re.fullmatch(r"e26_(baseline|plain)_organic8_10pct_(lr1e-4|lr1e-3)_s\d", name)
     if m:
         return "E26", f"{m.group(1)}-{m.group(2)}", seed
-    m = re.fullmatch(r"e27_(baseline_2400ep|plain_2000ep)_water16_10pct_s\d", name)
+    m = re.fullmatch(r"e27_(baseline_2400ep|plain_2000ep|plain_same10_2000ep)_water16_10pct_s\d", name)
     if m:
         return "E27", m.group(1).replace("_", "-"), seed
     return None

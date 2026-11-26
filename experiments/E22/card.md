@@ -1,6 +1,6 @@
 # E22: rolling out the water baseline: where does it go wrong?
 
-Status: agreed (18 Nov 2026), with both optional arms. Lauren gave the go-ahead to run; the code runs only after it passes independent review.
+Status: done (launched 19 Nov, read 23 and 26 Nov 2026).
 
 **Why this exists:** the end goal is latent rollout: encode once, step forward many times in feature space, and recover positions and momenta at the end. Before building anything for that, we need to know whether our ordinary model has a rollout problem worth fixing, and if so what kind. Every result so far is one-step error. In the literature review ("Latent rollout: how other fields do it", 18 Nov), one paper (A control theory of predictability in latent world models, 2026) found that one-step validation error was essentially unrelated to planning success (rank correlation 0.02), while accuracy over rollouts was related (0.62).
 
@@ -69,10 +69,38 @@ The two optional arms differ in how the same 78,400 steps were spent (and E05 sa
 **Later, not now:** the same on organic molecules. Their reference runs are only 392 fs long, so a longer reference would have to be computed with PET-MAD (the machine-learned potential that generated the organic data).
 
 ## Result
-(to be filled in)
+Read 23 and 26 Nov (results/eval/e22/). Tested on the 28 water test runs (the same liquid at 300 K, runs never seen in training). Primary model: flashmd_water16_scratch (one-step test error 0.0038).
+
+**Checks before the rollouts (19 Nov):** energy replay within 2.22e-3 eV (limit 5e-3); 16 fs of exact dynamics reproduces the stored frame to 4.56e-5 A; the batched step matches the one-step evaluation to 4.34e-7. The wrap check limit was changed after its first run (documented above).
+
+| Part | Result | Prediction |
+|---|---|---|
+| A1 against A3, error growth | Momentum error doubles every 48 fs for the model and every 272 fs for exact dynamics started from equally perturbed states. Position: 48 fs against 80 fs. By 2 ps both have reached the same level (0.226) | "Model doubles faster" (50%): held |
+| A2, error on its own outputs | First 2 ps: own-output error minus true-state error is -0.000016 with standard error 0.000015 (momentum). After 2 ps: 0.0027 on its own outputs against 0.0038 on true states | "Larger on its own outputs" (Lauren; Claude 60%): failed. The model is not worse on its own outputs |
+| B, temperature | Mean over runs falls from 290.8 K (first 10 ps) to 126.7 K (last 10 ps): -164 K, standard error 10 K. Total energy falls by 178 meV per molecule (standard error 7). In the second half hydrogens are at 132 K and oxygens at 188 K | "Drift of more than 10 K" (55%): held |
+| B, failure | No rollout became unphysical in 100 ps. Mean O-H bond 0.9634 A in the reference and 0.9664 A in the last window; H-O-H angle 104.80 and 104.91 degrees | "At least one unphysical" (30%): did not happen |
+| C, feature drift | Flagged from the 10 to 20 ps window (oxygen) and the 20 to 30 ps window (hydrogen) onwards | "Drift in at least one element" (Lauren; Claude 60%): held, but see the assumptions check |
+
+**Controls:**
+- Weaker model (10% of labels, 100 epochs) is worse: passed.
+- Failure detector (momenta times 1.01 per step): every run stopped by step 99: passed.
+- Drift must be flagged (momenta times 1.00002 per step): NOT flagged. That rollout ended at +7 K (standard error 12 K), under the 10 K limit. The added heating was real: against the uncorrected rollout's -164 K it is a shift of about 170 K. The model's own cooling cancelled it. The control assumed a model without drift and was badly designed; the drift rule itself flagged the primary rollout correctly.
+
+**Optional arms (10% of labels, models with equal one-step error; temperature change over 100 ps, per seed):**
+
+| Model | Seed 0 | Seed 1 | Seed 2 | Unphysical runs in |
+|---|---|---|---|---|
+| Baseline, 1,400 epochs (0.0061) | -10 K | 0 K | +23 K | 1 of 3 seeds |
+| Plain pretrained, then 1,000 epochs (0.0063) | +128 K | +1 K | +73 K | 2 of 3 seeds |
+
+Errors double every 48 fs in all six. The pretrained models drift more, but three seeds this far apart do not settle it.
 
 ## Assumptions check
-(to be filled in)
+- "After 2 ps the liquid stays at equilibrium" (used for A2 and C) is false here: the rolled-out liquid cools steadily. The lower A2 error after 2 ps and the feature drift in C are both mixed with that cooling, so neither can be read as an effect of the model being fed its own outputs.
+- The first 2 ps of A2 is not affected by this and shows no difference.
+- The drift control must be redesigned for a model that drifts on its own.
 
 ## Next
-(to be filled in)
+- The baseline does have a rollout problem: it loses energy steadily, and its error grows about five times faster than chaos alone.
+- Feeding the model its own outputs does not raise its one-step error, so that mechanism is not what makes the real-space rollout go wrong.
+- E28 switches on the FlashMD paper's energy correction and thermostat to see whether the cooling disappears.
