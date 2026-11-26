@@ -2,6 +2,12 @@
 
 Status: done (run 23 Nov, read 26 Nov 2026). Card written afterwards: the runs were agreed in conversation ("lets get this done", 23 Nov) before a card existed.
 
+**Update, 26 Nov (independent review of the plans, then checked by Claude):**
+- This is not yet the paper's full set-up. At inference the paper also (1) keeps the total momentum of the box equal to its input value and makes the centre of mass move uniformly (its appendix A.3), and (2) applies a random rotation before each model step and the inverse rotation after it (appendix A.4). eval/rollout_water.py does neither.
+- Measured on the saved rollouts: the model does not keep the total momentum. In the data it is zero. In the rollout with no correction, 32% of the kinetic energy at 100 ps is the whole box moving in one direction. With the energy correction it is 0.7%, and with a thermostat 0.7% (an equal share for three degrees of freedom out of 576 would be 0.5%).
+- "Both elements should have the same temperature" (written below) is wrong for the data. With the total momentum fixed at zero, an atom of mass m in a box of total mass M has mean kinetic energy lower by the factor (1 - m/M). For 64 molecules that makes oxygens 1.4% colder and hydrogens 0.1% colder: a gap of 3.9 K at 300 K. The 7.0 K (standard error 2.9) of the stored frames agrees with that.
+- Prediction for the exact 100 ps control, written before it is run: hydrogens 3.9 K hotter than oxygens. If so, the model's 12.2 K under the energy correction is 8 K or more too large and is a fault of the model.
+
 **Why this exists:** E22 rolled the water baseline out with no correction and it cooled by 164 K in 100 ps. The FlashMD paper (arXiv 2505.19350) never runs the model that way. After each step it rescales the momenta so that the total energy is unchanged, and it adds a thermostat. It then compares averaged properties (temperature of each element, structure), not trajectories. Without the same set-up we cannot compare our model with the paper's.
 
 **Question:** with the paper's energy correction, with a thermostat, and with both, does the rolled-out liquid hold its temperature for 100 ps, for each element?
@@ -41,7 +47,8 @@ Temperatures in kelvin, means over the 28 rollouts. Results in results/eval/e28/
 - The thermostat alone is enough for the temperature of both elements.
 
 ## Assumptions check
-- The exact starting frames already have hydrogens 7 K hotter than oxygens (standard error 2.9 K, over 2 ps). So the 12 K gap under the energy correction cannot yet be called a fault of the model. In exact dynamics both elements should reach the same temperature; we have not run the exact dynamics for 100 ps to see whether they do.
+- The exact starting frames already have hydrogens 7 K hotter than oxygens (standard error 2.9 K, over 2 ps). An earlier version of this line said both elements should reach the same temperature in exact dynamics. That was wrong: see the update at the top (3.9 K is expected in a box of this size with the total momentum fixed). The exact dynamics for 100 ps have not been run yet.
+- The rollouts do not fix the total momentum or apply the random rotation, so "paper-style" in the title is only partly true (update at the top).
 - Temperature of each element is the only averaged property read so far. The structure of the liquid (distances between atoms) and how fast molecules move through it have not been compared with exact dynamics.
 - The thermostat replaces part of each atom's momentum with random numbers every step, so the thermostat arms say nothing about whether the model's dynamics are right, only about its averages.
 - One model, one training seed.

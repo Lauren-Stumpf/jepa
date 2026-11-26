@@ -657,3 +657,16 @@ Decisions (Lauren):
 Mistake recorded: E27 was launched without the arm pretrained on the labelled frames only, on the strength of E13 (100-epoch runs). An assumption taken from short runs was carried over to long runs without a test.
 
 Literature, 26 Nov (searches, not a full review): learned large-step integrators for molecular dynamics that work in real space are now many: FlashMD (arXiv 2505.19350), learning the action (2508.01068), Hamiltonian flow maps (2601.22123), Langevin flow maps (2610.05998), Kolmogorov-Chapman maps (2611.12880). The last three train without trajectories. None steps in feature space, and none takes a control (temperature, field, bias force) as an input or is used to plan a control schedule; thermostats are applied outside the model.
+
+## 26 Nov 2026 (later): independent review of the plans (notes/next_steps_2026-11-26.md)
+
+Accepted findings (the first two checked by Claude against the paper and the saved rollouts):
+1. Wrong: "hydrogens and oxygens should have the same temperature". With the total momentum fixed at zero in a box of 64 molecules, 3.9 K is expected. The stored frames show 7.0 (2.9). The model's 12.2 K under the energy correction is therefore a fault of the model of 8 K or more.
+2. Our rollouts omit two inference-time steps of the FlashMD paper: keeping the total momentum (appendix A.3) and the random rotation (A.4). The model does not keep the total momentum: with no correction a third of the kinetic energy at 100 ps is whole-box motion.
+3. The novelty claim for the "controls as actions" direction was too broad, and "a thermostat cannot be applied in feature space" is unsound (decode, apply, encode again works). Prior work named by the review, not yet read by us: LiFlow (arXiv 2410.01464, temperature as an input), Trubiano and Hagan 2022 (arXiv 2210.05749, protocol optimised with a fitted dynamics model and checked in the exact simulator), latent simulators for proteins (arXiv 2509.02196). Needed baseline: real-space FlashMD with the control as an input.
+4. One training seed cannot rank two models: E22 shows -10, 0, +23 K for three seeds of one recipe. Proposed: roll out the eleven models we already have in one set-up to get the spread between seeds of every score.
+5. The comparison "error doubles every 48 fs against 272 fs" is not a fair split: the exact run was shifted once, the model adds a fresh error every step. Fair control: exact dynamics with a fresh random error of the model's one-step size every 16 fs.
+6. E29: with the loss at the end only, four steps in feature space are one deeper network predicting 32 fs. Needed: a direct model at four times the step and the same size, decoding of the intermediate features, and a measure of cost.
+7. E27 third arm: a win shows the extra frames are not needed, not that the objective is the cause (the arm also has two learning-rate cycles). Needed: a baseline with a learning-rate restart.
+
+Order proposed by the review: exact reference, scores, momentum constraint and rotation; then the eleven-model noise table; then the fresh-error control and the E27 restart baseline; then E29 redesigned. Not yet agreed by Lauren.
