@@ -46,6 +46,34 @@ Temperatures in kelvin, means over the 28 rollouts. Results in results/eval/e28/
 - With the energy correction alone, hydrogens are 12 K hotter than oxygens, and the gap is there from the start (9.4 K in the first 2 ps) and steady (10.7 K at 10 to 30 ps, 12.8 K at 70 to 90 ps).
 - The thermostat alone is enough for the temperature of both elements.
 
+### Exact reference and scores (run 26 Nov, read 27 Nov)
+Exact dynamics for 100 ps from the same 28 starts (eval/exact_reference_water.py): both checks passed (the stored frame at 16 fs is reproduced; total energy after 100 ps differs from the start by 0.006 meV per molecule on average, at most 0.07). Total momentum stays zero. Scores from eval/rollout_scores.py (results/eval/e28/scores.json); both scripts were reviewed twice. Temperatures, shape and structure are over 50 to 100 ps; diffusion is over the whole run.
+
+| Set-up | Hydrogen minus oxygen, K (standard error) | Height of the first oxygen-oxygen peak (at 2.78 A) | Structure difference from exact (O-O; noise level 0.0035) | Oxygen diffusion, A^2 per ps (standard error) |
+|---|---|---|---|---|
+| Exact | +1.6 (1.0) | 3.27 | reference | 0.178 (0.007) |
+| Model, energy correction | +11.9 (0.9) | 3.39 | 0.0177 | 0.148 (0.008) |
+| Model, thermostat only | +0.1 (0.4) | 3.31 | 0.0052 | 0.091 (0.002) |
+| Model, energy correction and thermostat | -0.1 (0.4) | 3.32 | 0.0079 | 0.091 (0.002) |
+| Model, no correction | -55.9 (11.6) | 5.86 | 0.2563 | 0.018 (0.002) |
+
+- Prediction for the exact runs (hydrogen minus oxygen 3.9 K): measured +2.9 (0.8) over 2 to 50 ps and +1.6 (1.0) over 50 to 100 ps. Close to the prediction but not equal to it (the second window is 2.3 standard errors below). Either way the model's +11.9 K is 8 to 10 K too large: a fault of the model.
+- Molecule shape is right in every corrected set-up (O-H bond 0.9639 against 0.9633 A; angle 104.79 against 104.79 degrees).
+- Under the energy correction the model's liquid is too ordered (peak 3.39 against 3.27, five times the noise level) and its oxygens move 17% more slowly, although it is 4 K hotter, which on its own would make it more disordered and faster.
+- With a thermostat, diffusion is about half of the exact value. A 100 fs Langevin thermostat slows diffusion by itself, so this cannot be read as a model fault until exact dynamics are run with the same thermostat (not yet done).
+
+### One-step error along the energy-corrected rollout (run 26 Nov, read 27 Nov)
+16 fs of exact dynamics from the model's own state at saved steps, compared with the model's next state (eval/rollout_exact.py, existing code). Mass-scaled momentum error:
+
+| States | Momentum error (standard error over runs) |
+|---|---|
+| True states, first 2 ps | 0.00375 (0.00003) |
+| Model's own states, first 2 ps | 0.00376 (0.00002) |
+| Model's own states, 2 to 50 ps | 0.00380 (0.00002) |
+| Model's own states, 50 to 100 ps | 0.00380 (0.00002) |
+
+After 100 ps of being fed its own states the one-step error is 1% higher than on true states. Without the cooling of E22 to confuse the comparison, being fed its own states does not make the model's steps worse. Its faults are small biases in every step (energy lost, energy moved to hydrogens, a liquid that is too ordered) that add up over many steps.
+
 ## Assumptions check
 - The exact starting frames already have hydrogens 7 K hotter than oxygens (standard error 2.9 K, over 2 ps). An earlier version of this line said both elements should reach the same temperature in exact dynamics. That was wrong: see the update at the top (3.9 K is expected in a box of this size with the total momentum fixed). The exact dynamics for 100 ps have not been run yet.
 - The rollouts do not fix the total momentum or apply the random rotation, so "paper-style" in the title is only partly true (update at the top).
@@ -55,5 +83,6 @@ Temperatures in kelvin, means over the 28 rollouts. Results in results/eval/e28/
 
 ## Next
 - Our baseline behaves as the paper describes: without correction it loses energy, with the paper's corrections it is stable for 100 ps.
-- Missing control: 100 ps of exact dynamics from the same 28 starts, read the same way, to see what the hydrogen and oxygen temperatures should be. Cheap (the exact force field), not yet run.
+- Done 27 Nov: exact dynamics for 100 ps from the same starts (see the result above).
+- Still missing: exact dynamics with the same thermostat, to see how much of the slower diffusion under a thermostat is the thermostat; the paper's total-momentum constraint and random rotation; the spread of every score between training seeds.
 - For any rollout comparison (E29), the corrected set-up is the reference, and the averaged properties to compare are those of the paper.
