@@ -211,9 +211,10 @@ def main():
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
     ex = load(args.exact)
-    assert bool(ex.get("check_reproduces_data", False)) and bool(ex.get("check_conserves_energy", False)), \
-        "the exact reference did not pass its own checks"
-    S = {"exact": None, "rollouts": {}}
+    ok_plain = bool(ex.get("check_reproduces_data", False)) and bool(ex.get("check_conserves_energy", False))
+    ok_thermostat = float(ex.get("langevin_fs", 0.0)) > 0 and bool(ex.get("check_thermostat_holds_temperature", False))
+    assert ok_plain or ok_thermostat, "the exact reference did not pass its own checks"
+    S = {"exact": None, "exact_thermostat_fs": float(ex.get("langevin_fs", 0.0)), "rollouts": {}}
     S["exact"], centres, g_ex = score(ex)
     B = ex["q"].shape[1]
     _, ga = rdf(ex, range(0, B // 2)); _, gb = rdf(ex, range(B // 2, B))

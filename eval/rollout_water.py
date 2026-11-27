@@ -27,6 +27,17 @@ Two corrections from the FlashMD paper (arXiv 2505.19350, appendices C and D), b
                     with xi standard normal. With both corrections on, the energy that is conserved
                     is the one measured after the first half thermostat step.
 
+Two further inference steps from the FlashMD paper, both off by default:
+--fix_momentum      after each model step the total momentum is set back to its value before the
+                    step and the centre of mass is moved by (time step) x (total momentum) / (total
+                    mass) (appendix A.3; see fix_momentum for how).
+--random_rotation   before each model step every system (positions, momenta and box) is rotated by
+                    a new random rotation, and the prediction is rotated back (appendix A.4). PET is
+                    not exactly rotation-equivariant; this stops a preferred direction of the model
+                    from adding up over many steps.
+Order in one step: thermostat half step (if on), rotation, model step, rotation back, momentum
+constraint, momentum scale (controls only), energy correction, thermostat half step (if on).
+
 Saved (npz): states at every step up to 126, at every step that is a multiple of --save_every,
 and at k+1 for every k that is a multiple of 50 (for part A2); temperature at every step; the
 step and reason each rollout stopped; and, for part A2, the model's one-step prediction from the
@@ -36,6 +47,7 @@ TRUE state at every 5th step of the first 2 ps.
       --out results/eval/e22/rollout_primary.npz
   python eval/rollout_water.py <model.pt> <config> --check_onestep data/water/pairs/16fs/test.xyz
   python eval/rollout_water.py <model.pt> <config> --check_wrap 10
+  python eval/rollout_water.py <model.pt> <config> --check_rotation 10
 """
 
 import argparse
@@ -64,9 +76,55 @@ def test_runs(manifest, runs_root):
     return [os.path.join(runs_root, r) for r in runs]
 
 
-def batched_step(model, numbers, q, p, cell, masses, device):
+def batched_step(model, numbers, q, p, cell, masses, device, rotations=None):
     """q, p: (B, N, 3) numpy (Angstrom, ASE momentum units); returns raw next (q, p).
-    Same computation as eval_onestep._metatrain_one_step with scaled_targets, for B systems."""
+    Same computation as eval_onestep._metatrain_one_step with scaled_targets, for B systems.
+    rotations: optional (B, 3, 3) proper rotation matrices (FlashMD paper, appendix A.4). System b
+    has its positions, momenta and box rotated by rotations[b] before the model step, and the
+    predicted positions and momenta are rotated back after it. None: no rotation (the box is the
+    same diagonal box for every system, exactly as before this option existed)."""
+    if rotations is None:
+        q_next, p_next = _model_step(model, numbers, q, p, [np.diag(cell)] * q.shape[0], masses, device)
+        return q_next, p_next
+    Rt = np.transpose(rotations, (0, 2, 1))
+    # row vectors: x' = x R^T for positions, momenta and each lattice vector (row of the box)
+    q_r, p_r = np.matmul(q, Rt), np.matmul(p, Rt)
+    boxes = [np.diag(cell) @ Rt[b] for b in range(q.shape[0])]
+    q_next_r, p_next_r = _model_step(model, numbers, q_r, p_r, boxes, masses, device)
+    return np.matmul(q_next_r, rotations), np.matmul(p_next_r, rotations)     # x = x' R
+
+
+def random_rotations(n, rng):
+    """n rotation matrices drawn uniformly from all proper rotations (determinant +1)."""
+    out = np.empty((n, 3, 3))
+    for i in range(n):
+        Q, R = np.linalg.qr(rng.standard_normal((3, 3)))
+        Q = Q * np.sign(np.diag(R))[None, :]       # uniform over all orthogonal matrices
+        if np.linalg.det(Q) < 0:
+            Q[:, 0] = -Q[:, 0]                      # map reflections onto rotations, keeping the distribution uniform
+        out[i] = Q
+    return out
+
+
+def fix_momentum(q_in, p_in, q_out, p_out, masses):
+    """FlashMD paper, appendix A.3: after a step the total momentum must equal its value before
+    the step, and the centre of mass must move by (time step) x (total momentum) / (total mass).
+    The paper states the two conditions; how to meet them is our choice: the smallest change,
+    measured by kinetic energy for the momenta (each atom's momentum is shifted in proportion to its
+    mass) and by mass-weighted distance for the positions (every atom is shifted by the same
+    vector). q_*, p_*: (B, N, 3)."""
+    M = masses.sum()
+    w = (masses / M)[None, :, None]
+    P_in = p_in.sum(1, keepdims=True)
+    p_fix = p_out - w * (p_out.sum(1, keepdims=True) - P_in)
+    dt = STRIDE_FS * ase.units.fs                   # ASE time units; velocity = p / m in A per ASE time unit
+    com_move = (masses[None, :, None] * (q_out - q_in)).sum(1, keepdims=True) / M
+    q_fix = q_out - (com_move - dt * P_in / M)
+    return q_fix, p_fix
+
+
+def _model_step(model, numbers, q, p, boxes, masses, device):
+    """One model step for B systems; boxes: list of B (3, 3) arrays whose rows are the lattice vectors."""
     from metatensor.torch import Labels, TensorBlock, TensorMap
     from metatomic.torch import ModelEvaluationOptions, ModelOutput, System
     from metatrain.utils.neighbor_lists import get_system_with_neighbor_lists
@@ -74,11 +132,11 @@ def batched_step(model, numbers, q, p, cell, masses, device):
     dev = torch.device(device)
     B, N = q.shape[:2]
     types = torch.tensor(numbers, dtype=torch.int32, device=dev)
-    cellt = torch.tensor(np.diag(cell), dtype=dtype, device=dev)
     samples = Labels(names=["system", "atom"], values=torch.tensor([[0, j] for j in range(N)], device=dev))
     xyz = Labels(names="xyz", values=torch.tensor([[0], [1], [2]], device=dev))
     systems = []
     for b in range(B):
+        cellt = torch.tensor(boxes[b], dtype=dtype, device=dev)
         s = System(types=types, positions=torch.tensor(q[b], dtype=dtype, device=dev), cell=cellt,
                    pbc=torch.tensor([True, True, True], device=dev))
         s.add_data("momentum", TensorMap(keys=Labels.single().to(dev), blocks=[TensorBlock(
@@ -206,6 +264,43 @@ def check_wrap(model, runs, masses_z, device, n=10, test_error=0.0038):
     return ok
 
 
+def check_rotation(model, runs, masses_z, device, n=10, test_error=0.0038, seed=0):
+    """Checks of the rotation option, on n stored frames of the test runs:
+    1. identity rotations give the same prediction as no rotation (the per-system box route);
+    2. reported, not a pass condition: how much a random rotation changes the prediction
+       (mass-scaled root mean square of the change in predicted displacement and momenta, the
+       scale of the one-step error). PET is not exactly rotation-equivariant, so this is not zero;
+    3. must fail: rotating positions and momenta but NOT the box breaks the periodic images, so
+       the prediction must change at least 10 times more than in 2."""
+    rng = np.random.default_rng(seed)
+    rms = lambda d, sm: float(np.sqrt(((d * sm) ** 2).mean()))  # noqa: E731
+    same = rot_q = rot_p = bad_q = bad_p = 0.0
+    for k in range(n):
+        r = read_run(runs[k % len(runs)])
+        i = (k * 797) % len(r["q"])
+        masses = np.array([masses_z[int(z)] for z in r["numbers"]])
+        sm = np.sqrt(masses)[None, :, None]
+        q0, p0 = r["q"][i][None], r["p"][i][None]
+        qa, pa = batched_step(model, r["numbers"], q0, p0, r["cell"], masses, device)
+        qi, pi = batched_step(model, r["numbers"], q0, p0, r["cell"], masses, device, rotations=np.eye(3)[None])
+        same = max(same, float(np.abs(qi - qa).max()), float(np.abs(pi - pa).max()))
+        R = random_rotations(1, rng)
+        qr, pr = batched_step(model, r["numbers"], q0, p0, r["cell"], masses, device, rotations=R)
+        rot_q = max(rot_q, rms((qr - q0) - (qa - q0), sm)); rot_p = max(rot_p, rms(pr - pa, 1.0 / sm))
+        # must fail: rotate positions and momenta, keep the unrotated box
+        Rt = np.transpose(R, (0, 2, 1))
+        qb_r, pb_r = _model_step(model, r["numbers"], np.matmul(q0, Rt), np.matmul(p0, Rt), [np.diag(r["cell"])], masses, device)
+        qb, pb = np.matmul(qb_r, R), np.matmul(pb_r, R)
+        bad_q = max(bad_q, rms((qb - q0) - (qa - q0), sm)); bad_p = max(bad_p, rms(pb - pa, 1.0 / sm))
+    print(f"identity rotation against no rotation ({n} frames): largest difference {same:.2e} (must be 0)")
+    print(f"random rotation against none: mass-scaled change in prediction, position {rot_q:.2e}, momentum {rot_p:.2e} "
+          f"({rot_p / test_error:.2f} of the one-step test error {test_error})")
+    print(f"must fail, box not rotated: position {bad_q:.2e}, momentum {bad_p:.2e}")
+    ok = same == 0.0 and bad_p > 10 * rot_p and bad_q > 10 * rot_q
+    print("PASS" if ok else "FAIL")
+    return ok
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("model")
@@ -218,10 +313,15 @@ def main():
     ap.add_argument("--conserve_energy", action="store_true", help="rescale momenta after each step so the total energy is unchanged")
     ap.add_argument("--langevin_fs", type=float, default=0.0, help="Langevin thermostat time constant in fs; 0 = no thermostat")
     ap.add_argument("--target_T", type=float, default=300.0)
-    ap.add_argument("--seed", type=int, default=0, help="random numbers of the thermostat")
+    ap.add_argument("--seed", type=int, default=0, help="random numbers of the thermostat and of the rotations")
+    ap.add_argument("--fix_momentum", action="store_true",
+                    help="after each model step keep the total momentum and move the centre of mass uniformly (FlashMD paper, appendix A.3)")
+    ap.add_argument("--random_rotation", action="store_true",
+                    help="a new random rotation of each system before every model step, undone after it (FlashMD paper, appendix A.4)")
     ap.add_argument("--out", default="")
     ap.add_argument("--check_onestep", default="", help="test pairs file: run the one-step check only")
     ap.add_argument("--check_wrap", type=int, default=0, help="run the wrap check on this many frames only")
+    ap.add_argument("--check_rotation", type=int, default=0, help="run the rotation checks on this many frames only")
     args = ap.parse_args()
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = load_flashmd(args.model, STRIDE_FS, device)
@@ -231,6 +331,8 @@ def main():
         sys.exit(0 if check_onestep(model, args.config, args.check_onestep, masses_z, device) else 1)
     if args.check_wrap:
         sys.exit(0 if check_wrap(model, runs, masses_z, device, args.check_wrap) else 1)
+    if args.check_rotation:
+        sys.exit(0 if check_rotation(model, runs, masses_z, device, args.check_rotation, seed=args.seed) else 1)
     assert args.out, "--out is required for a rollout"
     assert args.momentum_scale == 1.0 or not args.conserve_energy, "--momentum_scale is cancelled by --conserve_energy"
 
@@ -247,13 +349,22 @@ def main():
     masses = np.array([masses_z[int(z)] for z in numbers])
     B = len(starts)
     n_ref = min(len(rq) for rq, _ in refs)          # 126 states: 0 .. 2 ps
+    rng_rot = np.random.default_rng([args.seed, 1])  # rotations: separate from the thermostat's random numbers
+
+    def step(qq, pp):
+        """One model step with the options of this run (rotation, momentum constraint)."""
+        rot = random_rotations(len(qq), rng_rot) if args.random_rotation else None
+        qn_, pn_ = batched_step(model, numbers, qq, pp, cell, masses, device, rotations=rot)
+        if args.fix_momentum:
+            qn_, pn_ = fix_momentum(qq, pp, qn_, pn_, masses)
+        return qn_, pn_
 
     # A2, true-state half: the model's one-step prediction from the reference state at every 5th step
     a2_steps = list(range(0, n_ref - 1, 5))
     a2_true_q, a2_true_p = [], []
     for k in a2_steps:
         qt = np.stack([rq[k] for rq, _ in refs]); pt = np.stack([rp[k] for _, rp in refs])
-        q1, p1 = batched_step(model, numbers, qt, pt, cell, masses, device)
+        q1, p1 = step(qt, pt)
         a2_true_q.append(q1); a2_true_p.append(p1)
 
     save = sorted(set(range(0, min(n_ref + 1, args.n_steps + 1))) | set(range(0, args.n_steps + 1, args.save_every))
@@ -297,7 +408,7 @@ def main():
                 break
             idx = np.where(alive)[0]
             p_in = thermostat_half(p[idx], masses, args.langevin_fs, args.target_T, rng) if args.langevin_fs > 0 else p[idx]
-            qn, pn = batched_step(model, numbers, q[idx], p_in, cell, masses, device)
+            qn, pn = step(q[idx], p_in)
             pn = pn * args.momentum_scale
             if calc is not None:
                 e_before = kinetic(p_in, masses) + V[idx]
@@ -336,7 +447,8 @@ def main():
         a2_steps=np.array(a2_steps), a2_true_q=np.stack(a2_true_q),
         a2_true_p=np.stack(a2_true_p), model=args.model, config=args.config,
         momentum_scale=args.momentum_scale, stride_fs=STRIDE_FS, conserve_energy=args.conserve_energy,
-        langevin_fs=args.langevin_fs, target_T=args.target_T, total_energy=E_total, alpha=alpha_log)
+        langevin_fs=args.langevin_fs, target_T=args.target_T, total_energy=E_total, alpha=alpha_log,
+        fix_momentum=args.fix_momentum, random_rotation=args.random_rotation, seed=args.seed)
     print(f"written {args.out}: {alive.sum()} of {B} rollouts reached step {args.n_steps}")
 
 
