@@ -169,7 +169,8 @@ def movement(r):
     assert (np.diff(steps) == 10).all(), "saved states are not every 10 steps"
     q = r["q"][idx]                                               # (frames, runs, atoms, 3)
     jump = np.nanmax(np.abs(np.diff(q, axis=0)))
-    assert not jump > L0 / 4, f"an atom moves {jump:.2f} A in 160 fs: positions look wrapped"
+    # a wrapped atom jumps by about the box length (12.4 A); the largest real move in 160 fs measured on the exact runs is 3.5 A
+    assert not jump > L0 / 2, f"an atom moves {jump:.2f} A in 160 fs: positions look wrapped"
     com = (q * m[None, None, :, None]).sum(2) / m.sum()           # (frames, runs, 3)
     x = (q - com[:, :, None, :])[:, :, z == 8]                    # oxygens, box motion removed
     msd = {}
