@@ -56,7 +56,23 @@ Third arm (pretraining on the 896 labelled frames only), test momentum error, re
 - So the extra frames are not what made the pretrained arm better. Like the second arm, the third arm does not memorise its 896 training frames (0.0040 on them against 0.0046 on new frames).
 - Still not separated: the pretrained arms also have a second warm-up and decay of the learning rate, and start their labelled training from trained weights. The next control is a baseline trained with labels throughout whose learning rate also rises and falls twice, at the same steps.
 
-## Assumptions check
+## Control with two learning-rate cycles (added 27 Nov, approved by Lauren: "run whatever you need to")
+
+**Why:** the pretrained arms differ from the baseline in more than the pretraining objective. Their learning rate rises and falls twice (once in pretraining, once in labelled training), and their labelled training starts from a trained encoder with new output layers. Raising the learning rate again partway through training can help on its own. This control has all of that, with labels throughout.
+
+| Arm | Frames seen | Labels seen | Total optimiser steps | Compared with | Tested on |
+|---|---|---|---|---|---|
+| Control: baseline for 400 epochs (seed 0), its encoder saved with new output layers (the E14 route), then 2,000 epochs (seeds 0 to 2) | 896 | 896 | 22,400 + 112,000 = 134,400 | third arm; baseline | water test frames |
+
+What does each compared arm get that the other does not?
+- Control against the third arm: only the kind of the first 22,400 steps (labelled steps in place of pretraining steps, on the same 896 frames). Both have two learning-rate cycles, the same route and new output layers.
+- Control against the baseline: the second learning-rate cycle and the restart with new output layers.
+
+**Predictions (confidence, Claude's; Lauren's to add):**
+1. The third arm beats the control on every seed: 60%. If so, the gain comes from the pretraining objective.
+2. The control beats the 2,400-epoch baseline on every seed: 35%. If so, part of the gain is the restart itself.
+
+**Runs:** experiments/E27/runs_restart.txt (stage 1 about 4 hours, then three runs of about 20 hours on 46 GB cards); stage 2 by scripts/run_e27_restart.sh.
 - "The extra frames are not expected to matter" (written above from E13, which used 100-epoch runs) does not carry over to long runs. The pretrained arm saw 8,960 frames without labels and the baseline 896. Once the baseline is limited by data, those extra frames could be the whole effect. The third arm tests this.
 - A longer run is not the first part of a shorter one (the learning rate decays over each run's own length), so the 2,400-epoch and 1,400-epoch baselines are different trainings, not one curve.
 - One pretraining seed.

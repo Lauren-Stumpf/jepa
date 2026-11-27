@@ -131,7 +131,7 @@ def classify(name):
     m = re.fullmatch(r"e26_(baseline|plain)_organic8_10pct_(lr1e-4|lr1e-3)_s\d", name)
     if m:
         return "E26", f"{m.group(1)}-{m.group(2)}", seed
-    m = re.fullmatch(r"e27_(baseline_2400ep|plain_2000ep|plain_same10_2000ep)_water16_10pct_s\d", name)
+    m = re.fullmatch(r"e27_(baseline_2400ep|plain_2000ep|plain_same10_2000ep|restart_2000ep|restart_stage1_400ep)_water16_10pct_s\d", name)
     if m:
         return "E27", m.group(1).replace("_", "-"), seed
     return None

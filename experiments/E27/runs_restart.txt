@@ -1,0 +1,6 @@
+# name|kind|min GPU memory (MB)|runs per GPU|spec   (scripts/launch_runs.sh)
+# stage 2 (the encoder of stage 1) is written by scripts/run_e27_restart.sh; the stage-3 runs wait for it
+e27_restart_stage1_400ep_water16_10pct_s0|train|40000|1|configs/e27_restart_stage1_400ep_water16_10pct_s0.yaml
+e27_restart_2000ep_water16_10pct_s0|train|40000|1|configs/e27_restart_2000ep_water16_10pct_s0.yaml
+e27_restart_2000ep_water16_10pct_s1|train|40000|1|configs/e27_restart_2000ep_water16_10pct_s1.yaml
+e27_restart_2000ep_water16_10pct_s2|train|40000|1|configs/e27_restart_2000ep_water16_10pct_s2.yaml
