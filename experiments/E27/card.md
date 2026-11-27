@@ -1,6 +1,6 @@
 # E27: water, longer runs: does the pretraining lead grow until it pays back its cost?
 
-Status: first two arms done (launched 21 Nov, read 23 Nov 2026); third arm launched 26 Nov.
+Status: three arms done (first two read 23 Nov, third read 27 Nov 2026); the control with two learning-rate cycles is next.
 
 **Question:** at 134,400 total optimiser steps, does the pretrained model beat a baseline given the same total steps?
 
@@ -43,7 +43,18 @@ First two arms, test momentum error, read 23 Nov. Tested on water test frames (t
 - The reason is visible in the training errors. Two baseline seeds fit their 896 training frames three times better than they fit new frames (0.0022 against 0.0072). The pretrained models fit the training frames less closely (0.0039) and new frames better (0.0046). In long runs the baseline memorises its training frames and the pretrained model does not.
 - Error by element (seed 0; hydrogen, oxygen): baseline 0.0083, 0.0043; pretrained 0.0051, 0.0033.
 
-Third arm (pretraining on the 896 labelled frames only): launched 26 Nov; result to be added.
+Third arm (pretraining on the 896 labelled frames only), test momentum error, read 27 Nov. Same test frames, 3 seeds:
+
+| Arm | Frames seen | Seeds | Mean | Error on its own training frames at the end | Validation error at the end |
+|---|---|---|---|---|---|
+| Baseline, 2,400 epochs | 896 | 0.0072, 0.0055, 0.0069 | 0.0065 | 0.0022, 0.0036, 0.0022 | 0.0072, 0.0055, 0.0070 |
+| Plain pretrained on all 8,960 frames, then 2,000 epochs | 8,960 | 0.0046, 0.0045, 0.0046 | 0.0046 | 0.0040, 0.0039, 0.0039 | 0.0046, 0.0045, 0.0046 |
+| Plain pretrained on the 896 labelled frames only, then 2,000 epochs | 896 | 0.0046, 0.0048, 0.0046 | 0.0047 | 0.0040, 0.0041, 0.0041 | 0.0046, 0.0048, 0.0046 |
+
+- The third arm beats the baseline on every seed (its worst seed, 0.0048, against the baseline's best, 0.0055). Prediction (55%): held.
+- The third arm and the arm pretrained on all frames overlap: no difference. Prediction "worse than the second arm on every seed" (60%): failed.
+- So the extra frames are not what made the pretrained arm better. Like the second arm, the third arm does not memorise its 896 training frames (0.0040 on them against 0.0046 on new frames).
+- Still not separated: the pretrained arms also have a second warm-up and decay of the learning rate, and start their labelled training from trained weights. The next control is a baseline trained with labels throughout whose learning rate also rises and falls twice, at the same steps.
 
 ## Assumptions check
 - "The extra frames are not expected to matter" (written above from E13, which used 100-epoch runs) does not carry over to long runs. The pretrained arm saw 8,960 frames without labels and the baseline 896. Once the baseline is limited by data, those extra frames could be the whole effect. The third arm tests this.

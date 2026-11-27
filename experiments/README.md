@@ -101,7 +101,7 @@ Also: before comparing against a baseline, check that more training no longer im
 | E24 | Organic, labels on 17 molecules, pretraining on all 168: does pretraining help when the unlabelled frames hold more molecules than the labels? | proposed |
 | E25 | Three checks on existing models, no training: momentum by intervention, what is constant along an organic run, error by element | proposed |
 | E26 | Learning rate of both arms, and a random start with the pretrained weights' sizes: where do the water lead and the organic loss come from? | organic part done (at 0.001 the arms overlap: 0.0207 against 0.0212); rest not run |
-| E27 | Water, 10% of the labels, long runs at equal total steps: baseline 2,400 epochs against plain pretrained + 2,000 epochs | first two arms done (pretrained 0.0046 against 0.0065); third arm (pretrained on the 896 labelled frames only) launched 26 Nov |
+| E27 | Water, 10% of the labels, long runs at equal total steps: baseline 2,400 epochs against plain pretrained + 2,000 epochs | done: pretrained 0.0046 (all frames) and 0.0047 (labelled frames only) against 0.0065; control with two learning-rate cycles next |
 | E28 | Rolling out the water baseline the way the FlashMD paper does: energy correction and thermostat | done (303 K held for 100 ps with the energy correction alone) |
 | E29 | Small molecules with fixed neighbours: does stepping in feature space accumulate less error than stepping in real space? | proposed |
 
